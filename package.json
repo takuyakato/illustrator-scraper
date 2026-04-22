@@ -10,6 +10,8 @@
     "migrate:run": "tsx scripts/migration/02_notion_to_supabase.ts",
     "migrate:berryfeel": "tsx scripts/migration/03_berryfeel_merge.ts",
     "migrate:notion-cleanup": "tsx scripts/migration/04_notion_cleanup.ts",
+    "sync:supabase-to-notion": "tsx src/sync/supabase-to-notion.ts",
+    "sync:notion-to-supabase": "tsx src/sync/notion-to-supabase.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'scripts/**/*.ts' 'src/**/*.ts'",
     "format": "prettier --write 'scripts/**/*.ts' 'src/**/*.ts'",
