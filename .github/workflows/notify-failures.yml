@@ -1,0 +1,31 @@
+name: Notify Failures (hourly)
+
+# 1時間おきに、未解決かつ24時間以内に通知していない sync_failures を
+# Notion 失敗ログページに追記する。0件ならスキップ（Notion は触らない）。
+
+on:
+  workflow_dispatch: {}
+  # 本稼働時に次の3行のコメントアウトを外してください:
+  # schedule:
+  #   - cron: '0 * * * *'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_MAIN_DB_ID: ${{ secrets.NOTION_MAIN_DB_ID }}
+      NOTION_SYNC_LOG_PAGE_ID: ${{ secrets.NOTION_SYNC_LOG_PAGE_ID }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run notify
+        run: npm run sync:notify-failures

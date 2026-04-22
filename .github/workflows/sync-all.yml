@@ -1,0 +1,54 @@
+name: Sync All (10 min)
+
+# 10分おきに Notion/Sheets 双方向同期を実行する定期ジョブ。
+# cron は最初コメントアウトして push し、初回疎通テスト完了後に有効化する運用。
+#
+# 各 step には `if: always()` を付け、前 step が失敗しても後続 step は実行する。
+# 一方向の障害（例: Notion API ダウン）が全同期を連鎖停止させないようにする。
+
+on:
+  workflow_dispatch: {}
+  # 本稼働時に次の3行のコメントアウトを外してください:
+  # schedule:
+  #   - cron: '*/10 * * * *'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: sync-all
+      cancel-in-progress: false
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_MAIN_DB_ID: ${{ secrets.NOTION_MAIN_DB_ID }}
+      NOTION_SYNC_LOG_PAGE_ID: ${{ secrets.NOTION_SYNC_LOG_PAGE_ID }}
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Supabase → Notion
+        run: npm run sync:supabase-to-notion
+
+      - name: Notion → Supabase
+        if: always()
+        run: npm run sync:notion-to-supabase
+
+      - name: Supabase → Sheet
+        if: always()
+        run: npm run sync:supabase-to-sheet
+
+      - name: Sheet → Supabase
+        if: always()
+        run: npm run sync:sheet-to-supabase

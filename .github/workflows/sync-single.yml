@@ -1,0 +1,42 @@
+name: Sync Single (manual)
+
+# 指定した1本の同期ジョブだけを GitHub Actions 上で実行するための手動ワークフロー。
+# 初回アクティベーションの supabase-to-notion 単発実行や、特定ジョブの疎通確認で使う。
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'どの同期ジョブを走らせるか'
+        required: true
+        type: choice
+        options:
+          - supabase-to-notion
+          - notion-to-supabase
+          - supabase-to-sheet
+          - sheet-to-supabase
+          - auto-transition
+          - notify-failures
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_MAIN_DB_ID: ${{ secrets.NOTION_MAIN_DB_ID }}
+      NOTION_SYNC_LOG_PAGE_ID: ${{ secrets.NOTION_SYNC_LOG_PAGE_ID }}
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run selected job
+        run: npm run sync:${{ inputs.job }}
