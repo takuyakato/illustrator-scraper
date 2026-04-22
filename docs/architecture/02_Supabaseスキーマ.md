@@ -86,13 +86,15 @@ CREATE TYPE owner_enum AS ENUM (
   '加藤'
 );
 
--- ジャンル（5値）
+-- ジャンル（6値）
+-- v1.2（2026-04-23）で「広告用」を追加（A/Bランク43件のCW/Lancers/ココナラ広告用作家を分類するため）
 CREATE TYPE genre_enum AS ENUM (
   'BLサンド',
   'Capuri',
   'Berryfeel',
   'Webtoon',
-  'アシスタント'
+  'アシスタント',
+  '広告用'
 );
 ```
 
@@ -965,15 +967,11 @@ supabase/migrations/
 ### 11.1 シード抽出（合意事項リストv2.1より）
 
 ```sql
+-- 合意事項リスト v2.2（2026-04-23）で条件変更
 SELECT id, x_username, artist_name, rank, genres
   FROM illustrators
- WHERE rank IN ('S', 'A')
-   AND master_status = '依頼成功'
-   AND (
-        'BLサンド'::genre_enum = ANY(genres)
-     OR 'Capuri'::genre_enum = ANY(genres)
-     OR 'Berryfeel'::genre_enum = ANY(genres)
-   )
+ WHERE rank IN ('S', 'A', 'B')
+   AND NOT ('広告用'::genre_enum = ANY(genres))
    AND is_illustrator = TRUE
  ORDER BY rank, last_seen_at DESC;
 ```
