@@ -5,9 +5,8 @@ name: Auto Transition (daily JST 03:00)
 
 on:
   workflow_dispatch: {}
-  # 本稼働時に次の3行のコメントアウトを外してください:
-  # schedule:
-  #   - cron: '0 18 * * *'
+  schedule:
+    - cron: '0 18 * * *'
 
 jobs:
   transition:

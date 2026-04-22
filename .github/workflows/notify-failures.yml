@@ -5,9 +5,8 @@ name: Notify Failures (hourly)
 
 on:
   workflow_dispatch: {}
-  # 本稼働時に次の3行のコメントアウトを外してください:
-  # schedule:
-  #   - cron: '0 * * * *'
+  schedule:
+    - cron: '0 * * * *'
 
 jobs:
   notify:

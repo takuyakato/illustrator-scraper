@@ -8,9 +8,8 @@ name: Sync All (10 min)
 
 on:
   workflow_dispatch: {}
-  # 本稼働時に次の3行のコメントアウトを外してください:
-  # schedule:
-  #   - cron: '*/10 * * * *'
+  schedule:
+    - cron: '*/10 * * * *'
 
 jobs:
   sync:
