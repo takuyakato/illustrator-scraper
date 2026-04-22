@@ -35,18 +35,27 @@ import { asGenres, asRank } from './enum-cast.js';
 export function transformMainDbPage(page: PageObjectResponse): IllustratorRecord {
   const props = page.properties;
 
+  // --- プレースホルダー用の page.id 短縮版（16文字） ---
+  const pageIdShort = page.id.replace(/-/g, '').slice(0, 16);
+
   // --- 作家名 ---
   // スキーマの CHECK (is_illustrator IS NOT TRUE OR artist_name IS NOT NULL) を通すため、
-  // 空なら「(名無し-XXXXXXXX)」プレースホルダーを入れる（XXXXXXXX は page.id の先頭8文字）
+  // 空なら「(名無し-XXXXXXXXXXXXXXXX)」プレースホルダーを入れる（XX…は page.id のハイフン除去先頭16文字）
   const rawArtistName = extractTitle(props['作家名']);
   const artistName =
     rawArtistName && rawArtistName.trim() !== ''
       ? rawArtistName
-      : `(名無し-${page.id.replace(/-/g, '').slice(0, 8)})`;
+      : `(名無し-${pageIdShort})`;
 
   // --- Xリンク / ユーザー名 ---
+  // x_username はスキーマ上 NOT NULL + UNIQUE。
+  // Notion の「Xリンク」が空欄のレコードでは null になるため、
+  // 「(no-x-link-XXXXXXXXXXXXXXXX)」プレースホルダーを入れる（XX…は page.id のハイフン除去先頭16文字、UUIDなので一意性担保）。
+  // normalize_x_username トリガー（DB側）を通してもこの値は影響を受けない（URL/@/スラッシュ無しのテキスト）。
   const xUrlRaw = extractUrl(props['Xリンク']);
-  const xUsername = normalizeXUrl(xUrlRaw);
+  const xUsernameNormalized = normalizeXUrl(xUrlRaw);
+  const xUsername =
+    xUsernameNormalized ?? `(no-x-link-${page.id.replace(/-/g, '').slice(0, 16)})`;
 
   // --- メール（メイン/メアドの統合） ---
   const emailMain = extractEmail(props['メール']);
@@ -134,17 +143,32 @@ export function transformMainDbPage(page: PageObjectResponse): IllustratorRecord
 
 /**
  * Berryfeel 別DBの Notion ページから突合用の軽量レコードを作る。
- * メールアドレスは「メール」→「メアド」の順に参照する。
+ *
+ * Berryfeel別DBのプロパティ構成：
+ *   名前 (title) / メール (email) / 備考 (rich_text) /
+ *   再連絡時期 (rich_text) / ステータス (status)
+ *
+ * メール・ステータス・備考・再連絡時期も取り込み、統合時に活用する。
  */
 export function toBerryfeelRecord(page: PageObjectResponse): BerryfeelRecord {
   const props = page.properties;
-  const artistName = extractTitle(props['作家名']);
-  const email = extractEmail(props['メール']) ?? extractEmail(props['メアド']);
+
+  // ※ Berryfeel別DBの title プロパティ名は「名前」（メインDBの「作家名」ではない）
+  const artistName = extractTitle(props['名前']);
+  // ※ Berryfeel別DBに「メアド」プロパティは存在しない。「メール」のみ
+  const email = extractEmail(props['メール']);
+
+  const status = extractStatusName(props['ステータス']);
+  const note = extractRichText(props['備考']);
+  const recontactTime = extractRichText(props['再連絡時期']);
 
   return {
     pageId: page.id,
     artistName,
     email,
+    status,
+    note,
+    recontactTime,
     raw: page,
   };
 }

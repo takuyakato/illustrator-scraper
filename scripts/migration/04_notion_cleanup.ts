@@ -29,6 +29,7 @@ interface CleanupTarget {
   master_status: MasterStatus;
   contacted_by: string[] | null;
   owner_confirmed_by: string[] | null;
+  migration_snapshot: { source?: string } | null;
 }
 
 async function fetchCleanupTargets(): Promise<CleanupTarget[]> {
@@ -39,7 +40,9 @@ async function fetchCleanupTargets(): Promise<CleanupTarget[]> {
   while (true) {
     const { data, error } = await supabase
       .from('illustrators')
-      .select('id, notion_page_id, master_status, contacted_by, owner_confirmed_by')
+      .select(
+        'id, notion_page_id, master_status, contacted_by, owner_confirmed_by, migration_snapshot',
+      )
       .not('notion_page_id', 'is', null)
       .range(from, from + pageSize - 1);
 
@@ -57,8 +60,20 @@ async function fetchCleanupTargets(): Promise<CleanupTarget[]> {
 async function main(): Promise<void> {
   logger.info('=== Notion クリーンアップ開始 ===');
 
-  const targets = await fetchCleanupTargets();
-  logger.info({ count: targets.length }, 'クリーンアップ対象取得完了');
+  const allTargets = await fetchCleanupTargets();
+  logger.info({ count: allTargets.length }, 'クリーンアップ対象取得完了（全件）');
+
+  // Berryfeel 由来の新規INSERTレコードは Notion メインDBに存在しないため除外
+  // （Berryfeel別DBにも「マスターステータス」「連絡した人_new」「オーナー確認」プロパティが無いので
+  //  更新しようとすると 400 エラー）
+  const targets = allTargets.filter(
+    (t) => t.migration_snapshot?.source !== 'berryfeel_db',
+  );
+  const excluded = allTargets.length - targets.length;
+  logger.info(
+    { excluded, processable: targets.length },
+    'Berryfeel 由来レコードを除外',
+  );
 
   let successCount = 0;
   let errorCount = 0;
@@ -69,8 +84,10 @@ async function main(): Promise<void> {
       // 「連絡した人_new」は multi_select 型。Supabase の配列をそのまま name 配列に変換。
       const contactedByOptions = (t.contacted_by ?? []).map((name) => ({ name }));
 
-      // 「オーナー確認」は運用で空配列初期化（全員要確認扱い）
-      const ownerConfirmedOptions: Array<{ name: string }> = [];
+      // 「オーナー確認」は Supabase の owner_confirmed_by の値を書き戻す。
+      // 大半は空配列（未確認）だが、Berryfeel 統合されたレコード（ケースB 30件）は
+      // ['北條'] が入っているので、その値を反映する必要がある。
+      const ownerConfirmedOptions = (t.owner_confirmed_by ?? []).map((name) => ({ name }));
 
       await updatePageProperties(t.notion_page_id, {
         マスターステータス: {
@@ -101,9 +118,11 @@ async function main(): Promise<void> {
 
   // サマリー
   logger.info('=== Notion クリーンアップ サマリー ===');
-  logger.info(`対象件数    : ${targets.length}`);
-  logger.info(`成功        : ${successCount}`);
-  logger.info(`失敗        : ${errorCount}`);
+  logger.info(`全取得件数          : ${allTargets.length}`);
+  logger.info(`Berryfeel由来除外   : ${excluded}`);
+  logger.info(`処理対象件数        : ${targets.length}`);
+  logger.info(`成功                : ${successCount}`);
+  logger.info(`失敗                : ${errorCount}`);
 
   if (errorDetails.length > 0) {
     logger.warn({ errorDetails }, 'エラー詳細');

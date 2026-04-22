@@ -35,8 +35,11 @@ function mapContactStatus(value: string): MasterStatus {
 
 /**
  * 「ステータス 1」→ マスターステータス
+ *
+ * Berryfeel別DBの「ステータス」も同じ値セット（連絡したい/依頼前/...完了）
+ * なので、mapBerryfeelStatus としてもエクスポートして流用する。
  */
-function mapStatus1(value: string): MasterStatus {
+export function mapStatus1(value: string): MasterStatus {
   switch (value) {
     case '完了':
       return '依頼成功';
@@ -117,6 +120,12 @@ export function resolveMasterStatus(
   // 4. デフォルト
   return '候補';
 }
+
+/**
+ * Berryfeel別DB の「ステータス」→ マスターステータス。
+ * （Berryfeel別DBのstatus型プロパティはメインDB「ステータス 1」と同じ値セット）
+ */
+export { mapStatus1 as mapBerryfeelStatus };
 
 /**
  * クレジット希望（select）→ クレジット名義（rich_text）への変換。

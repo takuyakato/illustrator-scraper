@@ -34,6 +34,9 @@ async function main(): Promise<void> {
   const dryRun = isDryRun();
   const env = loadAppEnv();
 
+  // スキップ詳細を格納
+  const duplicates: Array<{ pageId: string; x_username: string; keptPageId: string }> = [];
+
   logger.info({ dryRun }, '=== マイグレーション開始（Notion → Supabase）===');
 
   // 1. Notion から全レコード取得
@@ -64,6 +67,46 @@ async function main(): Promise<void> {
     { transformed: records.length, skipped },
     '変換完了',
   );
+
+  // 2.5. x_username の重複排除（UNIQUE 制約対応）
+  //   - Notion メインDBには同じXリンクが複数登録されているレコードがある
+  //   - 重複する場合は先勝ち（最初に現れたレコードを採用）
+  //   - スキップしたレコードの pageId と x_username は warn ログで追跡
+  const dedupedRecords: IllustratorRecord[] = [];
+  const seenUsernames = new Map<string, string>(); // x_username -> 採用された pageId
+  for (const rec of records) {
+    const existingPageId = seenUsernames.get(rec.x_username);
+    if (existingPageId) {
+      duplicates.push({
+        pageId: rec.notion_page_id!,
+        x_username: rec.x_username,
+        keptPageId: existingPageId,
+      });
+      logger.warn(
+        {
+          pageId: rec.notion_page_id,
+          x_username: rec.x_username,
+          keptPageId: existingPageId,
+        },
+        'x_username 重複：このレコードはスキップします（先勝ち）',
+      );
+    } else {
+      seenUsernames.set(rec.x_username, rec.notion_page_id!);
+      dedupedRecords.push(rec);
+    }
+  }
+  logger.info(
+    {
+      beforeDedup: records.length,
+      afterDedup: dedupedRecords.length,
+      duplicatesSkipped: duplicates.length,
+    },
+    '重複排除完了',
+  );
+
+  // 以降は dedupedRecords を使う
+  records.length = 0;
+  records.push(...dedupedRecords);
 
   // 3. ドライランなら標準出力にサンプル表示して終了
   if (dryRun) {
@@ -106,14 +149,18 @@ async function main(): Promise<void> {
 
   // 5. サマリー
   logger.info('=== マイグレーション サマリー ===');
-  logger.info(`取得件数         : ${pages.length}`);
-  logger.info(`変換成功         : ${records.length}`);
-  logger.info(`変換スキップ     : ${skipped}`);
-  logger.info(`INSERT 成功      : ${inserted}`);
-  logger.info(`INSERT 失敗      : ${failed}`);
+  logger.info(`取得件数              : ${pages.length}`);
+  logger.info(`変換スキップ          : ${skipped}`);
+  logger.info(`x_username 重複スキップ: ${duplicates.length}`);
+  logger.info(`INSERT 対象件数        : ${records.length}`);
+  logger.info(`INSERT 成功            : ${inserted}`);
+  logger.info(`INSERT 失敗            : ${failed}`);
 
   if (skipReasons.length > 0) {
     logger.warn({ skipReasons }, '変換スキップの詳細');
+  }
+  if (duplicates.length > 0) {
+    logger.warn({ duplicates }, 'x_username 重複でスキップしたレコード一覧');
   }
   if (failedChunks.length > 0) {
     logger.error({ failedChunks }, 'INSERT 失敗したチャンクの詳細');

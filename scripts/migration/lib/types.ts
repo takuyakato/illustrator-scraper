@@ -50,7 +50,11 @@ export type Genre = 'BLサンド' | 'Capuri' | 'Berryfeel' | 'Webtoon' | 'アシ
 export interface IllustratorRecord {
   // --- ID・基本識別子 ---
   id?: string;
-  x_username: string | null;
+  /**
+   * 正規化済みXユーザー名。スキーマ上 NOT NULL + UNIQUE。
+   * Xリンクが無いレコードは `(no-x-link-<pageIdShort>)` プレースホルダーを入れる。
+   */
+  x_username: string;
   display_name?: string | null;
   bio?: string | null;
   follower_count?: number | null;
@@ -117,14 +121,21 @@ export interface IllustratorRecord {
 
 /**
  * Berryfeel 別 DB のレコード（突合用の軽量表現）。
+ * title は「名前」プロパティ、status/note/recontactTime は固有の運用情報。
  */
 export interface BerryfeelRecord {
   /** Notion の page.id */
   pageId: string;
-  /** 作家名（title プロパティ） */
+  /** 作家名（title プロパティ「名前」） */
   artistName: string | null;
   /** メールアドレス（あれば） */
   email: string | null;
+  /** Berryfeel別DB「ステータス」（status型、「ステータス 1」と同じ値セット） */
+  status: string | null;
+  /** Berryfeel別DB「備考」（rich_text） */
+  note: string | null;
+  /** Berryfeel別DB「再連絡時期」（rich_text） */
+  recontactTime: string | null;
   /** 元の Notion ページ全体（migration_snapshot 保存用） */
   raw: unknown;
 }

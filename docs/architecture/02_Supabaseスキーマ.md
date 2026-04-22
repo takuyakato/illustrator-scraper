@@ -170,8 +170,8 @@ CREATE TYPE genre_enum AS ENUM (
 | `legacy_capuri_berryfeel_search` | `TEXT[]` | YES | `'{}'::TEXT[]` | ー | 旧「Capuri/BerryFeel探し」 |
 | `legacy_mimura_comment` | `TEXT` | NO | ー | ー | 旧「三村コメント」 |
 | `legacy_hojo_comment` | `TEXT` | NO | ー | ー | 旧「北條コメント」 |
-| `legacy_mimura_points` | `INTEGER` | NO | ー | ー | 旧「三村点数」 |
-| `legacy_hojo_points` | `INTEGER` | NO | ー | ー | 旧「北條点数」 |
+| `legacy_mimura_points` | `NUMERIC` | NO | ー | ー | 旧「三村点数」（実データに 7.5 等の小数点ありのため NUMERIC） |
+| `legacy_hojo_points` | `NUMERIC` | NO | ー | ー | 旧「北條点数」（同上） |
 | `legacy_found_date` | `DATE` | NO | ー | ー | 旧「見つけた日」 |
 | `legacy_found_by` | `TEXT` | NO | ー | ー | 旧「見つけた人」 |
 | `legacy_start_date` | `DATE` | NO | ー | ー | 旧「開始日」 |
@@ -249,8 +249,8 @@ CREATE TABLE illustrators (
   legacy_capuri_berryfeel_search  TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
   legacy_mimura_comment           TEXT,
   legacy_hojo_comment             TEXT,
-  legacy_mimura_points            INTEGER,
-  legacy_hojo_points              INTEGER,
+  legacy_mimura_points            NUMERIC,
+  legacy_hojo_points              NUMERIC,
   legacy_found_date               DATE,
   legacy_found_by                 TEXT,
   legacy_start_date               DATE,
