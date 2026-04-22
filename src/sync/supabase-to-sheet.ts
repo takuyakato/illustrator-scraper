@@ -32,11 +32,10 @@ export async function syncSupabaseToSheet(): Promise<{
 }> {
   const sheets = getSheetsClient();
 
+  // 同期対象の抽出は VIEW illustrators_pending_to_sheet に集約（migration 015）。
   const { data, error } = await supabase
-    .from('illustrators')
+    .from('illustrators_pending_to_sheet')
     .select('*')
-    .is('is_illustrator', null)
-    .or('last_synced_to_sheet_at.is.null,updated_at.gt.last_synced_to_sheet_at')
     .order('first_detected_at', { ascending: false });
 
   if (error) {

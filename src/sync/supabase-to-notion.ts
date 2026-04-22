@@ -33,11 +33,11 @@ export async function syncSupabaseToNotion(): Promise<{
   created: number;
   failed: number;
 }> {
+  // 同期対象の抽出は VIEW illustrators_pending_to_notion に集約（migration 015）。
+  // PostgREST の .or() はカラム同士の比較をサポートしないため、DB 側で畳み込む。
   const { data, error } = await supabase
-    .from('illustrators')
-    .select('*')
-    .eq('is_illustrator', true)
-    .or('last_synced_to_notion_at.is.null,updated_at.gt.last_synced_to_notion_at');
+    .from('illustrators_pending_to_notion')
+    .select('*');
 
   if (error) {
     logger.error({ err: error }, 'Supabase→Notion: 対象取得失敗');
