@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+.tsbuildinfo
+
+# environment
+.env
+.env.local
+.env.*.local
+
+# secrets / credentials
+*.key
+*.pem
+credentials/
+service-account*.json
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# test / coverage
+coverage/
+.nyc_output/
+
+# backups (Notionからエクスポートしたデータ等、gitに入れない)
+backups/
+
+# supabase
+supabase/.temp/
+supabase/.branches/

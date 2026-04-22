@@ -1,0 +1,37 @@
+{
+  "name": "illustrator-scraper",
+  "version": "0.1.0",
+  "description": "BL/TL系イラストレーター候補をXフォローグラフから自動発掘するシステム",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "migrate:plan": "tsx scripts/migration/01_plan.ts",
+    "migrate:dryrun": "tsx scripts/migration/02_notion_to_supabase.ts --dry-run",
+    "migrate:run": "tsx scripts/migration/02_notion_to_supabase.ts",
+    "migrate:berryfeel": "tsx scripts/migration/03_berryfeel_merge.ts",
+    "migrate:notion-cleanup": "tsx scripts/migration/04_notion_cleanup.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint 'scripts/**/*.ts' 'src/**/*.ts'",
+    "format": "prettier --write 'scripts/**/*.ts' 'src/**/*.ts'",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0",
+    "pino": "^9.4.0",
+    "pino-pretty": "^11.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "eslint": "^9.12.0",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
