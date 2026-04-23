@@ -11,7 +11,6 @@ import {
   extractDateStart,
   extractEmail,
   extractMultiSelectNames,
-  extractNumber,
   extractRichText,
   extractSelectName,
   extractStatusName,
@@ -35,7 +34,6 @@ export function buildSupabaseLedProperties(row: IllustratorRow): NotionPropertie
       title: [{ text: { content: row.artist_name ?? '' } }],
     },
     Xリンク: { url: row.x_link ?? null },
-    フォロワー数: { number: row.follower_count ?? null },
     初回検出日時: row.first_detected_at
       ? { date: { start: row.first_detected_at } }
       : { date: null },
@@ -65,7 +63,7 @@ export function buildAllProperties(row: IllustratorRow): NotionProperties {
       rich_text: [{ text: { content: row.credit_name ?? '' } }],
     },
     連絡した日: row.contacted_at ? { date: { start: row.contacted_at } } : { date: null },
-    連絡した人_new: {
+    連絡した人: {
       multi_select: (row.contacted_by ?? []).map((name) => ({ name })),
     },
     備考: {
@@ -130,18 +128,11 @@ export function extractNotionLedFields(
     genres: extractMultiSelectNames(p['ジャンル']) as Genre[],
     note: extractRichText(p['備考']),
     contacted_at: extractDateStart(p['連絡した日']),
-    contacted_by: extractMultiSelectNames(p['連絡した人_new']),
+    contacted_by: extractMultiSelectNames(p['連絡した人']),
     email: extractEmail(p['メール']),
     portfolio_link: extractUrl(p['ポートフォリオサイト']),
     other_contact: extractUrl(p['その他連絡先']),
     credit_name: extractRichText(p['クレジット名義']),
     pixiv_link: extractUrl(p['Pixivリンク']),
   };
-}
-
-/**
- * Notion のフォロワー数（number）を抽出。Supabase→Notion で書き戻した値の再取得用。
- */
-export function extractFollowerCount(page: PageObjectResponse): number | null {
-  return extractNumber(page.properties['フォロワー数']);
 }
