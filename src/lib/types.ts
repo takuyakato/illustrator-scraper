@@ -72,23 +72,13 @@ export interface IllustratorRow {
   contacted_by: string[];
   note: string | null;
 
-  // Legacy（同期ジョブでは基本触らない）
-  legacy_status: string | null;
-  legacy_status_1: string | null;
+  // Legacy（同期ジョブでは基本触らない。migration 018 で10カラム削除済み）
   legacy_contact_status: string | null;
-  legacy_capuri_berryfeel_search: string[];
   legacy_mimura_comment: string | null;
   legacy_hojo_comment: string | null;
-  legacy_mimura_points: number | null;
   legacy_hojo_points: number | null;
-  legacy_found_date: string | null;
   legacy_found_by: string | null;
-  legacy_start_date: string | null;
-  legacy_end_date: string | null;
   legacy_capuri_request_id: string | null;
-  legacy_mail_alt: string | null;
-  legacy_recontact_time: string | null;
-  legacy_rejection_reason: string[];
   migration_snapshot: unknown;
 
   // Notion 連携
