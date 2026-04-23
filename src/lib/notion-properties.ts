@@ -34,10 +34,11 @@ export function buildSupabaseLedProperties(row: IllustratorRow): NotionPropertie
       title: [{ text: { content: row.artist_name ?? '' } }],
     },
     Xリンク: { url: row.x_link ?? null },
-    初回検出日時: row.first_detected_at
-      ? { date: { start: row.first_detected_at } }
+    // 見つけた日 は日付のみで表示（時刻不要）。Supabase.first_detected_at（TIMESTAMPTZ）
+    // から YYYY-MM-DD 部分だけを取り出す。
+    見つけた日: row.first_detected_at
+      ? { date: { start: row.first_detected_at.slice(0, 10) } }
       : { date: null },
-    最終検出日時: row.last_seen_at ? { date: { start: row.last_seen_at } } : { date: null },
   };
 }
 
