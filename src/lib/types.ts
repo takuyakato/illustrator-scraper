@@ -5,15 +5,18 @@
  * enum 値は Supabase スキーマ v1.1 に準拠。
  */
 
-/** master_status_enum（7値） */
+/**
+ * master_status_enum（7値）
+ * migration 002 create_enums.sql の ENUM 定義に一致させること。
+ */
 export type MasterStatus =
   | '候補'
-  | '連絡する'
   | '連絡中'
   | '返信なし'
-  | '連絡先不明'
+  | '多忙辞退'
+  | '条件次第'
   | '依頼成功'
-  | '対象外';
+  | '依頼不可';
 
 /** rank_enum */
 export type Rank = 'S' | 'A' | 'B' | 'C';
@@ -21,11 +24,17 @@ export type Rank = 'S' | 'A' | 'B' | 'C';
 /** owner_enum */
 export type Owner = '三村' | '北條' | '加藤';
 
-/** style_tag_enum */
-export type StyleTag = '美麗' | 'クセ強' | 'カジュアル' | 'イケメン';
+/** style_tag_enum（4値） */
+export type StyleTag = 'イケメン' | 'リアル' | 'デフォルメ' | 'クセ強';
 
-/** genre_enum（6値、広告用を含む） */
-export type Genre = 'BL' | 'TL' | '少女' | '女性' | '一般' | '広告用';
+/** genre_enum（6値、migration 011 で 広告用 追加） */
+export type Genre =
+  | 'BLサンド'
+  | 'Capuri'
+  | 'Berryfeel'
+  | 'Webtoon'
+  | 'アシスタント'
+  | '広告用';
 
 /** Supabase illustrators 1 行分 */
 export interface IllustratorRow {
@@ -109,3 +118,39 @@ export type SyncJobName =
   | 'supabase_to_sheet'
   | 'auto_transition'
   | 'notify_failures';
+
+/** sync_state テーブル 1 行 */
+export interface SyncStateRow {
+  job_name: SyncJobName;
+  last_run_at: string;
+  updated_at: string;
+}
+
+/** sync_failures テーブル 1 行（migration 014 の last_notified_at 追加済み） */
+export interface SyncFailureRow {
+  id: string;
+  source: SyncSource;
+  target: SyncTarget;
+  record_id: string | null;
+  operation: SyncOperation;
+  error_message: string;
+  retry_count: number;
+  created_at: string;
+  resolved_at: string | null;
+  last_notified_at: string | null;
+}
+
+/** scraping_logs テーブル 1 行（Phase 3 スクレイパー用） */
+export interface ScrapingLogRow {
+  id: string;
+  mode: 'initial' | 'differential' | 'manual';
+  seed_username: string | null;
+  started_at: string;
+  completed_at: string | null;
+  status: 'running' | 'success' | 'failed' | 'partial';
+  candidates_checked: number;
+  candidates_new: number;
+  candidates_duplicated: number;
+  errors: unknown;
+  created_at: string;
+}
