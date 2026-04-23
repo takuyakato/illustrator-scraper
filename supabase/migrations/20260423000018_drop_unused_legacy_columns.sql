@@ -26,12 +26,23 @@
 --     - legacy_capuri_request_id  : Phase 2.5 projects_history 移行で使用
 --     - migration_snapshot        : 保険として JSONB 完全スナップショット
 --
+--   注意: illustrators_pending_to_notion / _sheet は SELECT i.* で
+--   全カラムに依存しているため、VIEW を一旦 DROP → DROP COLUMN →
+--   VIEW を migration 017 と同じ定義で再作成する、という順序で実行する。
+--
 -- Safety:
 --   復旧は migration_snapshot (JSONB) から可能。
---   削除前の値は 2026-04-22 のマイグレーション時点で記録されており、
---   その後書き換わった legacy_* カラムはない（設計上 write-once）。
+--   VIEW 再作成中はトランザクション内でアトミックに処理されるので、
+--   同期ジョブがクエリしても一貫した結果が返る。
 -- ==========================================
 
+BEGIN;
+
+-- ====== 1. 依存 VIEW を一旦 DROP ======
+DROP VIEW IF EXISTS illustrators_pending_to_notion;
+DROP VIEW IF EXISTS illustrators_pending_to_sheet;
+
+-- ====== 2. 不要カラムを削除 ======
 ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_mimura_points;
 ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_status_1;
 ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_mail_alt;
@@ -43,5 +54,33 @@ ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_capuri_berryfeel_search;
 ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_found_date;
 ALTER TABLE illustrators DROP COLUMN IF EXISTS legacy_status;
 
--- VIEW（illustrators_pending_to_notion / _sheet）は SELECT i.* なので
--- 自動的に新しいカラム構成を反映する。再作成不要。
+-- ====== 3. VIEW を migration 017 と同じ定義で再作成 ======
+CREATE VIEW illustrators_pending_to_notion
+  WITH (security_invoker = on) AS
+SELECT i.*
+  FROM illustrators i
+ WHERE i.is_illustrator = TRUE
+   AND (
+        i.last_synced_to_notion_at IS NULL
+     OR i.updated_at > i.last_synced_to_notion_at
+   );
+
+COMMENT ON VIEW illustrators_pending_to_notion IS
+  'supabase-to-notion 同期ジョブが処理すべきレコード。'
+  '「is_illustrator=true かつ (未同期 OR Supabase 側で更新あり)」';
+
+CREATE VIEW illustrators_pending_to_sheet
+  WITH (security_invoker = on) AS
+SELECT i.*
+  FROM illustrators i
+ WHERE i.is_illustrator IS NULL
+   AND (
+        i.last_synced_to_sheet_at IS NULL
+     OR i.updated_at > i.last_synced_to_sheet_at
+   );
+
+COMMENT ON VIEW illustrators_pending_to_sheet IS
+  'supabase-to-sheet 同期ジョブが処理すべきレコード。'
+  '「is_illustrator IS NULL かつ (未同期 OR Supabase 側で更新あり)」';
+
+COMMIT;
