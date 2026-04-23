@@ -1,14 +1,14 @@
 /**
  * 自動遷移ジョブ（1日1回、JST 03:00）。
  *
- * 「連絡中」状態で contacted_at から30日経過したレコードを「返信なし」に遷移する。
+ * 「連絡中」状態で contacted_at から 14日経過したレコードを「返信なし」に遷移する。
  *
  * 重要: master_status / note は Notion主導フィールドなので、通常の
  * supabase-to-notion では Notion に書き戻されない（パターンB）。
  * このジョブは auto-transition の結果を Notion にも反映させる特別ルート。
  *
  * フロー:
- *   1. 対象候補（連絡中 + 30日経過）を事前に SELECT（ID と notion_page_id を記録）
+ *   1. 対象候補（連絡中 + 14日経過）を事前に SELECT（ID と notion_page_id を記録）
  *   2. Supabase RPC で一括遷移（note に [自動遷移: ...] を追記）
  *   3. 対象候補ごとに Notion ページの master_status / note を直接更新
  *      + last_synced_to_notion_at を NOW に設定（次サイクルでの再送を抑止）
@@ -31,9 +31,9 @@ export async function runAutoTransition(): Promise<{
   notionFailed: number;
 }> {
   // 1. 対象候補を取得（RPC 実行前に ID をキャプチャ）
-  //    Postgres 側の function と同じ条件: 連絡中 + contacted_at <= CURRENT_DATE - 30日
+  //    Postgres 側の function と同じ条件: 連絡中 + contacted_at <= CURRENT_DATE - 14日
   const thresholdDate = new Date();
-  thresholdDate.setUTCDate(thresholdDate.getUTCDate() - 30);
+  thresholdDate.setUTCDate(thresholdDate.getUTCDate() - 14);
   const thresholdYmd = thresholdDate.toISOString().slice(0, 10);
 
   const { data: candidates, error: qErr } = await supabase
