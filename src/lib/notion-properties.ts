@@ -36,9 +36,6 @@ export function buildSupabaseLedProperties(row: IllustratorRow): NotionPropertie
     },
     Xリンク: { url: row.x_link ?? null },
     フォロワー数: { number: row.follower_count ?? null },
-    検出元: {
-      multi_select: (row.detected_from ?? []).map((name) => ({ name })),
-    },
     初回検出日時: row.first_detected_at
       ? { date: { start: row.first_detected_at } }
       : { date: null },
