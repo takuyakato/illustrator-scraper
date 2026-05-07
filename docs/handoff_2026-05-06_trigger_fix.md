@@ -402,3 +402,12 @@ CLAUDE.md または `docs/architecture/03_マイグレーション手順.md` に
   - 1件: Notion→Supabase で `duplicate key value violates unique constraint "illustrators_x_username_key"`。`notion_page_id` 未紐付けだが同一 `x_username` の既存レコードがあるケース。
   - 8件: Supabase→Notion の 502 / 504 / timeout。古い一時障害ログ。
 - `src/sync/notion-to-supabase.ts` を修正し、Notion新規ページ扱いでも `x_username` が既存レコードに一致する場合は INSERT せず既存レコードへ `notion_page_id` を紐付けるようにした。
+- commit `e3d61ed` を push 後、GitHub Actions `retry-notion-failures` run `25507070653` が success。
+- 実行後、未解決ログは `unresolved_count = 8`, `unresolved_occurrences = 8`, `latest_failure_seen_at = 2026-05-06 13:29:34.164242+00`。
+- 残り8件は古い Supabase→Notion の 502 / 504 / timeout と判断。現在再発していないため、手動で解決済みにしてよい。
+- 古い一時障害ログを手動で解決済みに更新。
+- 最終確認:
+  - `unresolved_count = 0`
+  - `unresolved_occurrences = 0`
+  - `latest_failure_seen_at = null`
+- 判定: 今回の同期障害対応は DB 上も完了。
