@@ -35,6 +35,79 @@ function pageIdShort(pageId: string): string {
   return pageId.replace(/-/g, '').slice(0, 16);
 }
 
+export async function syncNotionPageToSupabase(page: Parameters<typeof extractNotionLedFields>[0]): Promise<
+  'updated' | 'inserted'
+> {
+  const failureKey = `notion:supabase:update:page:${page.id}`;
+
+  // 既存レコードを探す（notion_page_id で紐付け）
+  const { data: existing, error: findErr } = await supabase
+    .from('illustrators')
+    .select('id')
+    .eq('notion_page_id', page.id)
+    .maybeSingle();
+  if (findErr) throw findErr;
+
+  const nowIso = new Date().toISOString();
+
+  if (existing) {
+    // 既存：Notion主導フィールドのみ更新
+    const { error: updErr } = await supabase
+      .from('illustrators')
+      .update({
+        ...extractNotionLedFields(page),
+        last_synced_from_notion_at: nowIso,
+      })
+      .eq('id', existing.id);
+    if (updErr) throw updErr;
+    await resolveSyncFailure({
+      source: 'notion',
+      target: 'supabase',
+      record_id: existing.id,
+    });
+    await resolveSyncFailure({
+      source: 'notion',
+      target: 'supabase',
+      failure_key: failureKey,
+    });
+    return 'updated';
+  }
+
+  // Notion 側で新規作成されたページ → Supabase に INSERT
+  const rawArtistName = extractArtistName(page);
+  const xLink = extractXLink(page);
+  const xUsername = normalizeXUrl(xLink);
+  const short = pageIdShort(page.id);
+
+  const { data: insertedRow, error: insErr } = await supabase
+    .from('illustrators')
+    .insert({
+      notion_page_id: page.id,
+      artist_name: rawArtistName && rawArtistName.trim() !== ''
+        ? rawArtistName
+        : `(名無し-${short})`,
+      x_link: xLink,
+      x_username: xUsername ?? `(no-x-link-${short})`,
+      is_illustrator: true,
+      ...extractNotionLedFields(page),
+      last_synced_from_notion_at: nowIso,
+    })
+    .select('id')
+    .single();
+  if (insErr) throw insErr;
+  await resolveSyncFailure({
+    source: 'notion',
+    target: 'supabase',
+    record_id: insertedRow.id,
+  });
+  await resolveSyncFailure({
+    source: 'notion',
+    target: 'supabase',
+    failure_key: failureKey,
+  });
+  return 'inserted';
+}
+
 export async function syncNotionToSupabase(): Promise<{
   total: number;
   updated: number;
@@ -63,70 +136,10 @@ export async function syncNotionToSupabase(): Promise<{
   for (const page of pages) {
     const failureKey = `notion:supabase:update:page:${page.id}`;
     try {
-      // 既存レコードを探す（notion_page_id で紐付け）
-      const { data: existing, error: findErr } = await supabase
-        .from('illustrators')
-        .select('id')
-        .eq('notion_page_id', page.id)
-        .maybeSingle();
-      if (findErr) throw findErr;
-
-      const nowIso = new Date().toISOString();
-
-      if (existing) {
-        // 既存：Notion主導フィールドのみ更新
-        const { error: updErr } = await supabase
-          .from('illustrators')
-          .update({
-            ...extractNotionLedFields(page),
-            last_synced_from_notion_at: nowIso,
-          })
-          .eq('id', existing.id);
-        if (updErr) throw updErr;
-        await resolveSyncFailure({
-          source: 'notion',
-          target: 'supabase',
-          record_id: existing.id,
-        });
-        await resolveSyncFailure({
-          source: 'notion',
-          target: 'supabase',
-          failure_key: failureKey,
-        });
+      const result = await syncNotionPageToSupabase(page);
+      if (result === 'updated') {
         updated += 1;
       } else {
-        // Notion 側で新規作成されたページ → Supabase に INSERT
-        const rawArtistName = extractArtistName(page);
-        const xLink = extractXLink(page);
-        const xUsername = normalizeXUrl(xLink);
-        const short = pageIdShort(page.id);
-
-        const { data: insertedRow, error: insErr } = await supabase
-          .from('illustrators')
-          .insert({
-            notion_page_id: page.id,
-            artist_name: rawArtistName && rawArtistName.trim() !== ''
-              ? rawArtistName
-              : `(名無し-${short})`,
-            x_link: xLink,
-            x_username: xUsername ?? `(no-x-link-${short})`,
-            is_illustrator: true,
-            ...extractNotionLedFields(page),
-            last_synced_from_notion_at: nowIso,
-          })
-          .select('id')
-          .single();
-        if (insErr) throw insErr;
-        await resolveSyncFailure({
-          source: 'notion',
-          target: 'supabase',
-          record_id: insertedRow.id,
-        });
-        await resolveSyncFailure({
-          source: 'notion',
-          target: 'supabase',
-          failure_key: failureKey,
-        });
         inserted += 1;
       }
     } catch (e) {

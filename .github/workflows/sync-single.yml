@@ -17,6 +17,7 @@ on:
           - sheet-to-supabase
           - auto-transition
           - notify-failures
+          - retry-notion-failures
 
 jobs:
   sync:

@@ -386,3 +386,12 @@ CLAUDE.md または `docs/architecture/03_マイグレーション手順.md` に
   - 未解決ログはまだ `unresolved_count = 92`, `unresolved_occurrences = 9592`。
   - GitHub Actions で解決処理を効かせるには、ローカルの `resolveSyncFailure` 実装修正を commit/push してから `Sync Single (manual)` の `notion-to-supabase` を実行する必要がある。
   - commit/push 前に GitHub Actions を実行すると、古いコードでは同期成功しても既存 `sync_failures.resolved_at` は自動更新されない。
+- 2026-05-08:
+  - commit `5079c07` を `origin/main` へ push 済み。
+  - GitHub Actions `Sync Single (manual)` で `notion-to-supabase` を実行し、run `25506259036` が success。
+  - 実行後、未解決ログは `unresolved_count = 59`, `unresolved_occurrences = 5911` まで減少。
+  - schema drift / enum 不一致修正は一部効いている。残り59件の error_sample 確認が次作業。
+- 残り59件の上位 error_sample は引き続き `style_tag_enum` / `owner_enum` / `master_status_enum` の古いエラー文。
+- `last_seen_at` は更新されていないため、新規再発ではなく再処理対象に入らなかった過去ログと判断。
+- 通常の Notion→Supabase は `last_edited_time` カーソル方式なので、古いページの失敗ログだけを拾う専用復旧ジョブ `src/sync/retry-notion-failures.ts` を追加。
+- `.github/workflows/sync-single.yml` に `retry-notion-failures` を追加。次はこのジョブを commit/push して GitHub Actions から実行する。

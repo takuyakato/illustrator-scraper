@@ -16,6 +16,7 @@
     "sync:sheet-to-supabase": "tsx src/sync/sheet-to-supabase.ts",
     "sync:auto-transition": "tsx src/sync/auto-transition.ts",
     "sync:notify-failures": "tsx src/failures/notify.ts",
+    "sync:retry-notion-failures": "tsx src/sync/retry-notion-failures.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "format": "prettier --write 'scripts/**/*.ts' 'src/**/*.ts'",
