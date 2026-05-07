@@ -47,6 +47,10 @@ poc/**/cookies.json
 poc/**/*.har
 poc/**/output-*.json
 
+# scraper runtime artifacts
+.scraper/
+tmp/
+
 # supabase
 supabase/.temp/
 supabase/.branches/
