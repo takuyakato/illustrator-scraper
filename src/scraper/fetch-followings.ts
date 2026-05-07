@@ -10,6 +10,8 @@ import { config as loadDotenv } from 'dotenv';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { type ScrapedFollowing, toCandidateRecord } from './filter.js';
+
 loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 
 const storagePath = path.resolve(process.cwd(), '.scraper/x-storage-state.json');
@@ -17,16 +19,7 @@ const outputPath = path.resolve(process.cwd(), 'tmp/scraper-followings.json');
 const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? 200);
 const headless = process.env.SCRAPER_HEADLESS === 'true';
 
-interface Candidate {
-  username: string;
-  display_name: string;
-  bio: string;
-  website: string | null;
-  follower_count: number;
-  following_count: number;
-  verified: boolean;
-  created_at?: string;
-}
+type Candidate = ScrapedFollowing;
 
 interface SeedRecord {
   x_username: string;
@@ -99,6 +92,12 @@ while (candidates.size < maxItems && followingGraphqlUrl && followingGraphqlHead
 }
 
 const allCandidates = Array.from(candidates.values()).slice(0, maxItems);
+const preparedRecords = allCandidates
+  .map((candidate) => toCandidateRecord(candidate, seed.x_username))
+  .filter((record): record is NonNullable<typeof record> => Boolean(record));
+const existingUsernames = await fetchExistingUsernames(preparedRecords.map((record) => record.x_username));
+const newRecords = preparedRecords.filter((record) => !existingUsernames.has(record.x_username));
+const duplicateRecords = preparedRecords.filter((record) => existingUsernames.has(record.x_username));
 const durationSec = Math.round((Date.now() - started) / 1000);
 
 mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -110,6 +109,12 @@ writeFileSync(
       seed,
       stats: {
         totalFetched: allCandidates.length,
+        prepared: preparedRecords.length,
+        newCandidates: newRecords.length,
+        duplicated: duplicateRecords.length,
+        excludedByAi: preparedRecords.filter((record) => record.exclusion_reason === 'ai_keyword').length,
+        excludedByNoPixiv: preparedRecords.filter((record) => record.exclusion_reason === 'no_pixiv_link').length,
+        pendingScout: preparedRecords.filter((record) => record.is_illustrator === null).length,
         durationSec,
         graphqlPages,
         errors: errors.length,
@@ -117,13 +122,18 @@ writeFileSync(
       errors,
       sample: allCandidates.slice(0, 5),
       candidates: allCandidates,
+      preparedRecords,
+      newRecords,
+      duplicateUsernames: duplicateRecords.map((record) => record.x_username),
     },
     null,
     2,
   ),
 );
 
-console.log(`完了: ${allCandidates.length}件 / ${durationSec}秒 / errors=${errors.length}`);
+console.log(
+  `完了: fetched=${allCandidates.length}, new=${newRecords.length}, duplicated=${duplicateRecords.length}, pending=${preparedRecords.filter((record) => record.is_illustrator === null).length}, excluded=${preparedRecords.filter((record) => record.is_illustrator === false).length} / ${durationSec}秒 / errors=${errors.length}`,
+);
 console.log(`出力: ${outputPath}`);
 
 await browser.close();
@@ -159,6 +169,31 @@ async function resolveSeed(): Promise<SeedRecord> {
   return { x_username: seed.x_username, artist_name: seed.artist_name ?? '' };
 }
 
+async function fetchExistingUsernames(usernames: string[]): Promise<Set<string>> {
+  if (usernames.length === 0) return new Set();
+
+  const supabaseUrl = requireEnv('SUPABASE_URL');
+  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const uniqueUsernames = [...new Set(usernames)];
+  const result = new Set<string>();
+  const chunkSize = 100;
+
+  for (let i = 0; i < uniqueUsernames.length; i += chunkSize) {
+    const chunk = uniqueUsernames.slice(i, i + chunkSize);
+    const { data, error } = await supabase.from('illustrators').select('x_username').in('x_username', chunk);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (row.x_username) result.add(row.x_username);
+    }
+  }
+
+  return result;
+}
+
 function requireEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
@@ -187,6 +222,9 @@ function extractEntries(graphqlJson: unknown): Candidate[] {
         display_name: core?.name ?? legacy?.name ?? '',
         bio: legacy?.description ?? '',
         website: legacy?.entities?.url?.urls?.[0]?.expanded_url ?? null,
+        bio_urls: (legacy?.entities?.description?.urls ?? [])
+          .map((u: { expanded_url?: string }) => u.expanded_url)
+          .filter((url: string | undefined): url is string => Boolean(url)),
         follower_count: Number(legacy?.followers_count ?? 0),
         following_count: Number(legacy?.friends_count ?? 0),
         verified: Boolean(userResult?.verification?.verified ?? legacy?.verified ?? userResult?.is_blue_verified ?? false),
