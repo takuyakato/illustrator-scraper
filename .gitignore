@@ -41,6 +41,12 @@ coverage/
 # backups (Notionからエクスポートしたデータ等、gitに入れない)
 backups/
 
+# POC: 機密を含むファイル（POC コード本体は git 管理する）
+poc/**/storage-state.json
+poc/**/cookies.json
+poc/**/*.har
+poc/**/output-*.json
+
 # supabase
 supabase/.temp/
 supabase/.branches/

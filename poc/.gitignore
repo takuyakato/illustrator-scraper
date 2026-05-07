@@ -1,0 +1,9 @@
+node_modules/
+_shared/test-seed.json
+**/.chrome-profile/
+**/.webkit-profile/
+**/storage-state.json
+**/cookies.json
+**/*.har
+**/output-*.json
+.env.local

@@ -1,0 +1,30 @@
+{
+  "name": "illustrator-scraper-poc",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Phase 3-0 POC: 4 手段（Playwright / rettiwt-api / xAI / X API pay-per-use）を並行検証して勝者を確定",
+  "scripts": {
+    "seed": "tsx _shared/fetch-test-seed.ts",
+    "pw:login": "tsx playwright-graphql/login.ts",
+    "pw:login:creds": "tsx playwright-graphql/login-with-credentials.ts",
+    "pw:login:webkit": "PW_BROWSER=webkit tsx playwright-graphql/login.ts",
+    "pw:fetch": "tsx playwright-graphql/fetch-followings.ts",
+    "pw:fetch:webkit": "PW_BROWSER=webkit tsx playwright-graphql/fetch-followings.ts",
+    "rw:fetch": "tsx rettiwt-api/fetch-followings.ts",
+    "xai:fetch": "tsx xai-grok/fetch-followings.ts",
+    "xapi:fetch": "tsx x-api/fetch-followings.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0",
+    "rettiwt-api": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
