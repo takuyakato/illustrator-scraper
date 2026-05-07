@@ -395,3 +395,10 @@ CLAUDE.md または `docs/architecture/03_マイグレーション手順.md` に
 - `last_seen_at` は更新されていないため、新規再発ではなく再処理対象に入らなかった過去ログと判断。
 - 通常の Notion→Supabase は `last_edited_time` カーソル方式なので、古いページの失敗ログだけを拾う専用復旧ジョブ `src/sync/retry-notion-failures.ts` を追加。
 - `.github/workflows/sync-single.yml` に `retry-notion-failures` を追加。次はこのジョブを commit/push して GitHub Actions から実行する。
+- commit `82ac439` を push 後、GitHub Actions `Sync Single (manual)` で `retry-notion-failures` を実行。run `25506638943` が success。
+- 実行後、未解決ログは `unresolved_count = 9`, `unresolved_occurrences = 195`, `latest_failure_seen_at = 2026-05-07 15:51:08.954+00` まで減少。
+- 残り9件は復旧ジョブで再試行後も失敗している可能性があるため、上位 error_sample 確認が必要。
+- 残り9件の内訳:
+  - 1件: Notion→Supabase で `duplicate key value violates unique constraint "illustrators_x_username_key"`。`notion_page_id` 未紐付けだが同一 `x_username` の既存レコードがあるケース。
+  - 8件: Supabase→Notion の 502 / 504 / timeout。古い一時障害ログ。
+- `src/sync/notion-to-supabase.ts` を修正し、Notion新規ページ扱いでも `x_username` が既存レコードに一致する場合は INSERT せず既存レコードへ `notion_page_id` を紐付けるようにした。

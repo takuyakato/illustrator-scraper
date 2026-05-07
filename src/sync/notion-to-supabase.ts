@@ -79,6 +79,40 @@ export async function syncNotionPageToSupabase(page: Parameters<typeof extractNo
   const xUsername = normalizeXUrl(xLink);
   const short = pageIdShort(page.id);
 
+  if (xUsername) {
+    const { data: existingByUsername, error: usernameFindErr } = await supabase
+      .from('illustrators')
+      .select('id')
+      .eq('x_username', xUsername)
+      .maybeSingle();
+    if (usernameFindErr) throw usernameFindErr;
+
+    if (existingByUsername) {
+      // notion_page_id 未紐付けだが x_username が一致する既存レコードがある場合は、
+      // 重複 INSERT せず既存レコードへ Notion ページを紐付ける。
+      const { error: linkErr } = await supabase
+        .from('illustrators')
+        .update({
+          notion_page_id: page.id,
+          ...extractNotionLedFields(page),
+          last_synced_from_notion_at: nowIso,
+        })
+        .eq('id', existingByUsername.id);
+      if (linkErr) throw linkErr;
+      await resolveSyncFailure({
+        source: 'notion',
+        target: 'supabase',
+        record_id: existingByUsername.id,
+      });
+      await resolveSyncFailure({
+        source: 'notion',
+        target: 'supabase',
+        failure_key: failureKey,
+      });
+      return 'updated';
+    }
+  }
+
   const { data: insertedRow, error: insErr } = await supabase
     .from('illustrators')
     .insert({
