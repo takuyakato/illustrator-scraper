@@ -23,7 +23,7 @@ import {
 } from '../lib/sheet-converter.js';
 import { getSheetsClient, SHEET_ID } from '../lib/sheets.js';
 import { supabase } from '../lib/supabase.js';
-import { recordSyncFailure } from '../lib/sync-failure.js';
+import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 
 const SHEET_TAB = '候補プール';
 const VALID_RANKS = new Set(['S', 'A', 'B', 'C']);
@@ -51,6 +51,7 @@ export async function syncSheetToSupabase(): Promise<{
   let failed = 0;
 
   for (const p of parsed) {
+    const failureKey = `sheets:supabase:update:${p.xUsername}`;
     // 既に同期済みはスキップ（再判定時はユーザーが手動で「未同期」に戻す運用）
     if (p.syncStatus === SYNC_STATUS_SYNCED) {
       skipped += 1;
@@ -76,6 +77,7 @@ export async function syncSheetToSupabase(): Promise<{
           target: 'supabase',
           operation: 'update',
           error_message: `x_username='${p.xUsername}' が Supabase に見つかりません（行 ${p.rowIndex}）`,
+          failure_key: failureKey,
         });
         mColumnUpdates.push({
           range: `${SHEET_TAB}!M${p.rowIndex}`,
@@ -103,6 +105,16 @@ export async function syncSheetToSupabase(): Promise<{
         .update(patch)
         .eq('id', target.id);
       if (updErr) throw updErr;
+      await resolveSyncFailure({
+        source: 'sheets',
+        target: 'supabase',
+        record_id: target.id,
+      });
+      await resolveSyncFailure({
+        source: 'sheets',
+        target: 'supabase',
+        failure_key: failureKey,
+      });
 
       mColumnUpdates.push({
         range: `${SHEET_TAB}!M${p.rowIndex}`,
@@ -117,6 +129,7 @@ export async function syncSheetToSupabase(): Promise<{
         target: 'supabase',
         operation: 'update',
         error_message: `行 ${p.rowIndex} (${p.xUsername}): ${msg}`,
+        failure_key: failureKey,
       });
       mColumnUpdates.push({
         range: `${SHEET_TAB}!M${p.rowIndex}`,
@@ -144,6 +157,7 @@ export async function syncSheetToSupabase(): Promise<{
         target: 'supabase',
         operation: 'update',
         error_message: `M列一括更新失敗: ${(e as Error).message}`,
+        failure_key: 'sheets:supabase:update:m-column-batch',
       });
     }
   }

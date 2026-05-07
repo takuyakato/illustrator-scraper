@@ -39,7 +39,6 @@ interface ExistingRec {
   genres: Genre[] | null;
   owner_confirmed_by: Owner[] | null;
   note: string | null;
-  legacy_recontact_time: string | null;
 }
 
 async function fetchExistingRecords(): Promise<ExistingRec[]> {
@@ -51,7 +50,7 @@ async function fetchExistingRecords(): Promise<ExistingRec[]> {
   while (true) {
     const { data, error } = await supabase
       .from('illustrators')
-      .select('id, artist_name, email, genres, owner_confirmed_by, note, legacy_recontact_time')
+      .select('id, artist_name, email, genres, owner_confirmed_by, note')
       .range(from, from + pageSize - 1);
 
     if (error) {
@@ -70,28 +69,26 @@ async function fetchExistingRecords(): Promise<ExistingRec[]> {
  * Berryfeel の備考を既存 note に追記する（空行で区切る）。
  * 既存 note が空なら Berryfeel 備考だけを入れる。
  */
-function mergeNote(existingNote: string | null, berryfeelNote: string | null): string {
-  if (!berryfeelNote || berryfeelNote.trim() === '') {
+function mergeNote(
+  existingNote: string | null,
+  berryfeelNote: string | null,
+  berryfeelRecontactTime: string | null,
+): string {
+  const additions: string[] = [];
+  if (berryfeelNote && berryfeelNote.trim() !== '') {
+    additions.push(`[Berryfeel統合] ${berryfeelNote.trim()}`);
+  }
+  if (berryfeelRecontactTime && berryfeelRecontactTime.trim() !== '') {
+    additions.push(`[Berryfeel再連絡時期] ${berryfeelRecontactTime.trim()}`);
+  }
+  if (additions.length === 0) {
     return existingNote ?? '';
   }
-  const tagged = `[Berryfeel統合] ${berryfeelNote.trim()}`;
+  const tagged = additions.join('\n');
   if (!existingNote || existingNote.trim() === '') {
     return tagged;
   }
   return `${existingNote}\n${tagged}`;
-}
-
-/**
- * Berryfeel の再連絡時期を既存 legacy_recontact_time にマージする。
- * 既存があれば維持、空なら Berryfeel の値を入れる。
- */
-function mergeRecontactTime(
-  existing: string | null,
-  bfRecontact: string | null,
-): string | null {
-  if (existing && existing.trim() !== '') return existing;
-  if (bfRecontact && bfRecontact.trim() !== '') return bfRecontact.trim();
-  return null;
 }
 
 /**
@@ -191,8 +188,7 @@ async function main(): Promise<void> {
         ownersSet.add('北條');
 
         // Berryfeel の運用情報をマージ
-        const mergedNote = mergeNote(matched.note, bf.note);
-        const mergedRecontact = mergeRecontactTime(matched.legacy_recontact_time, bf.recontactTime);
+        const mergedNote = mergeNote(matched.note, bf.note, bf.recontactTime);
 
         // Berryfeel のステータスを master_status に反映
         // （合意事項 v2.1：BerryFeel統合レコードは依頼可能プールに直接乗せる想定）
@@ -204,14 +200,12 @@ async function main(): Promise<void> {
           rank: 'S';
           owner_confirmed_by: Owner[];
           note: string;
-          legacy_recontact_time: string | null;
           master_status?: MasterStatus;
         } = {
           genres: Array.from(genresSet),
           rank: 'S',
           owner_confirmed_by: Array.from(ownersSet),
           note: mergedNote,
-          legacy_recontact_time: mergedRecontact,
         };
 
         // 依頼不可・多忙辞退・返信なし等の明確なネガティブステータスのみ反映
@@ -258,7 +252,7 @@ async function main(): Promise<void> {
         const masterStatus: MasterStatus = bf.status ? mapBerryfeelStatus(bf.status) : '候補';
 
         // Berryfeel備考を note に設定（空なら空文字）
-        const noteValue = bf.note && bf.note.trim() !== '' ? `[Berryfeel統合] ${bf.note.trim()}` : '';
+        const noteValue = mergeNote(null, bf.note, bf.recontactTime);
 
         const record: IllustratorRecord = {
           notion_page_id: bf.pageId,
@@ -281,22 +275,12 @@ async function main(): Promise<void> {
           is_illustrator: true,
 
           // Legacy：Berryfeel 固有情報を反映
-          legacy_status: null,
-          legacy_status_1: null,
           legacy_contact_status: bf.status, // Berryfeel 側の原値を退避
-          legacy_capuri_berryfeel_search: [],
           legacy_mimura_comment: null,
           legacy_hojo_comment: null,
-          legacy_mimura_points: null,
           legacy_hojo_points: null,
-          legacy_found_date: null,
           legacy_found_by: null,
-          legacy_start_date: null,
-          legacy_end_date: null,
           legacy_capuri_request_id: null,
-          legacy_mail_alt: null,
-          legacy_recontact_time: bf.recontactTime,
-          legacy_rejection_reason: [],
 
           migration_snapshot: {
             source: 'berryfeel_db',

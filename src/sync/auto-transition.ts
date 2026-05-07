@@ -17,7 +17,7 @@
 import { logger } from '../lib/logger.js';
 import { notion, sleep, NOTION_RATE_LIMIT_SLEEP_MS } from '../lib/notion.js';
 import { supabase } from '../lib/supabase.js';
-import { recordSyncFailure } from '../lib/sync-failure.js';
+import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 
 interface Candidate {
   id: string;
@@ -96,12 +96,20 @@ export async function runAutoTransition(): Promise<{
       await sleep(NOTION_RATE_LIMIT_SLEEP_MS);
 
       // last_synced_to_notion_at 単独 UPDATE（次サイクルの supabase-to-notion で再送を抑止）
-      await supabase
+      const { error: stampErr } = await supabase
         .from('illustrators')
         .update({ last_synced_to_notion_at: new Date().toISOString() })
         .eq('id', c.id);
+      if (stampErr) {
+        throw new Error(`last_synced_to_notion_at 更新失敗: ${stampErr.message}`);
+      }
 
       notionUpdated += 1;
+      await resolveSyncFailure({
+        source: 'supabase',
+        target: 'notion',
+        record_id: c.id,
+      });
     } catch (e) {
       notionFailed += 1;
       const msg = (e as Error).message ?? String(e);

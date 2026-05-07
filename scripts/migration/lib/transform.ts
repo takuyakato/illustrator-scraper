@@ -83,9 +83,6 @@ export function transformMainDbPage(page: PageObjectResponse): IllustratorRecord
   const contactedBy = contactedByRaw ? [contactedByRaw] : [];
 
   // --- Legacy ---
-  const legacyRejectionReason = extractMultiSelectNames(props['断られた理由']);
-  const legacyCapuriBerryfeelSearch = extractMultiSelectNames(props['Capuri/BerryFeel探し']);
-  const legacyRecontactTime = extractRichText(props['再連絡時期']);
   const legacyCapuriRequestId = extractFirstRelationId(props['Capuri依頼']);
 
   const record: IllustratorRecord = {
@@ -114,22 +111,12 @@ export function transformMainDbPage(page: PageObjectResponse): IllustratorRecord
     is_illustrator: true,
 
     // --- Legacy カラム ---
-    legacy_status: extractSelectName(props['ステータス']),
-    legacy_status_1: extractStatusName(props['ステータス 1']),
     legacy_contact_status: extractStatusName(props['連絡状況']),
-    legacy_capuri_berryfeel_search: legacyCapuriBerryfeelSearch,
     legacy_mimura_comment: extractRichText(props['三村コメント']),
     legacy_hojo_comment: extractRichText(props['北條コメント']),
-    legacy_mimura_points: extractNumber(props['三村点数']),
     legacy_hojo_points: extractNumber(props['北條点数']),
-    legacy_found_date: extractDateStart(props['見つけた日']),
     legacy_found_by: extractSelectName(props['見つけた人']),
-    legacy_start_date: extractDateStart(props['開始日']),
-    legacy_end_date: extractDateStart(props['終了予定日']),
     legacy_capuri_request_id: legacyCapuriRequestId,
-    legacy_mail_alt: emailAlt,
-    legacy_recontact_time: legacyRecontactTime,
-    legacy_rejection_reason: legacyRejectionReason,
 
     // --- migration_snapshot ---
     migration_snapshot: {

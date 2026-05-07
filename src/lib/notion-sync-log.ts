@@ -18,6 +18,8 @@ export interface SyncLogFailure {
   target: string;
   error_message: string;
   created_at?: string;
+  last_seen_at?: string;
+  occurrence_count?: number;
 }
 
 /**
@@ -55,6 +57,8 @@ export async function appendFailureLogToNotion(failures: SyncLogFailure[]): Prom
 
   for (const [key, items] of Object.entries(grouped)) {
     const sample = (items[0]?.error_message ?? '').slice(0, 200);
+    const occurrences = items.reduce((sum, item) => sum + (item.occurrence_count ?? 1), 0);
+    const lastSeen = items[0]?.last_seen_at?.replace('T', ' ').slice(0, 16);
     children.push({
       object: 'block',
       type: 'bulleted_list_item',
@@ -62,7 +66,9 @@ export async function appendFailureLogToNotion(failures: SyncLogFailure[]): Prom
         rich_text: [
           {
             type: 'text',
-            text: { content: `${key}: ${items.length} 件 / 例: ${sample}` },
+            text: {
+              content: `${key}: 未解決 ${items.length} 件 / 発生 ${occurrences} 回 / 最終 ${lastSeen ?? '-'} / 例: ${sample}`,
+            },
           },
         ],
       },

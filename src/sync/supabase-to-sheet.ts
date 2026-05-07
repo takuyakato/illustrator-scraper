@@ -9,7 +9,7 @@
  *   - sheet_row_index があれば既存行の A〜I 列のみを更新（J〜L のスカウト入力を保護）
  *   - sheet_row_index が無ければ APPEND で新規行を追加、返ってきた行番号を保存
  *   - 書き込み後、last_synced_to_sheet_at を単独 UPDATE
- *     （migration 012 のトリガー分岐により updated_at は進まず、ループしない）
+ *     （update_updated_at トリガーにより updated_at は進まず、ループしない）
  *
  * 注意: Phase 2 時点では is_illustrator IS NULL のレコードはほぼ存在しない
  * （Phase 3 のスクレイパーが稼働してから流入）。本ジョブは空運転が標準。
@@ -19,7 +19,7 @@ import { logger } from '../lib/logger.js';
 import { getSheetsClient, SHEET_ID, parseRowIndex } from '../lib/sheets.js';
 import { rowToSheetA2I, rowToSheetFull } from '../lib/sheet-converter.js';
 import { supabase } from '../lib/supabase.js';
-import { recordSyncFailure } from '../lib/sync-failure.js';
+import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import type { IllustratorRow } from '../lib/types.js';
 
 const SHEET_TAB = '候補プール';
@@ -51,6 +51,7 @@ export async function syncSupabaseToSheet(): Promise<{
   let failed = 0;
 
   for (const row of rows) {
+    const operation = row.sheet_row_index ? 'update' : 'insert';
     try {
       if (row.sheet_row_index) {
         // 既存行：A〜I のみ更新（J/K/L のスカウト入力を保護）
@@ -67,7 +68,7 @@ export async function syncSupabaseToSheet(): Promise<{
           .update({ last_synced_to_sheet_at: new Date().toISOString() })
           .eq('id', row.id);
         if (stampErr) {
-          logger.warn({ err: stampErr, id: row.id }, 'last_synced_to_sheet_at 更新失敗');
+          throw new Error(`last_synced_to_sheet_at 更新失敗: ${stampErr.message}`);
         }
         updated += 1;
       } else {
@@ -98,10 +99,15 @@ export async function syncSupabaseToSheet(): Promise<{
           .update({ last_synced_to_sheet_at: new Date().toISOString() })
           .eq('id', row.id);
         if (stampErr) {
-          logger.warn({ err: stampErr, id: row.id }, 'last_synced_to_sheet_at 更新失敗');
+          throw new Error(`last_synced_to_sheet_at 更新失敗: ${stampErr.message}`);
         }
         appended += 1;
       }
+      await resolveSyncFailure({
+        source: 'supabase',
+        target: 'sheets',
+        record_id: row.id,
+      });
     } catch (e) {
       failed += 1;
       const msg = (e as Error).message ?? String(e);
@@ -109,7 +115,7 @@ export async function syncSupabaseToSheet(): Promise<{
         source: 'supabase',
         target: 'sheets',
         record_id: row.id,
-        operation: row.sheet_row_index ? 'update' : 'insert',
+        operation,
         error_message: msg,
       });
       logger.error(

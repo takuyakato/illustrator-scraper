@@ -6,7 +6,7 @@
  */
 
 /**
- * master_status_enum（7値）
+ * master_status_enum
  * migration 002 create_enums.sql の ENUM 定義に一致させること。
  */
 export type MasterStatus =
@@ -16,16 +16,17 @@ export type MasterStatus =
   | '多忙辞退'
   | '条件次第'
   | '依頼成功'
-  | '依頼不可';
+  | '依頼不可'
+  | '時間をおいて再度連絡';
 
 /** rank_enum */
 export type Rank = 'S' | 'A' | 'B' | 'C';
 
-/** owner_enum */
-export type Owner = '三村' | '北條' | '加藤';
+/** Notion の「オーナー確認」multi_select。運用中に担当者が増えるため TEXT[] で保持する。 */
+export type Owner = string;
 
-/** style_tag_enum（4値） */
-export type StyleTag = 'イケメン' | 'リアル' | 'デフォルメ' | 'クセ強';
+/** Notion の「絵柄タグ」multi_select。運用中にタグが増えるため TEXT[] で保持する。 */
+export type StyleTag = string;
 
 /** genre_enum（6値、migration 011 で 広告用 追加） */
 export type Genre =
@@ -125,7 +126,10 @@ export interface SyncFailureRow {
   operation: SyncOperation;
   error_message: string;
   retry_count: number;
+  failure_key: string;
+  occurrence_count: number;
   created_at: string;
+  last_seen_at: string;
   resolved_at: string | null;
   last_notified_at: string | null;
 }

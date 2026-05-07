@@ -24,7 +24,7 @@ import {
   extractXLink,
 } from '../lib/notion-properties.js';
 import { supabase } from '../lib/supabase.js';
-import { recordSyncFailure } from '../lib/sync-failure.js';
+import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import { getSyncStateLastRunAt, setSyncStateLastRunAt } from '../lib/sync-state.js';
 import { normalizeXUrl } from '../lib/x-url-normalizer.js';
 
@@ -59,9 +59,9 @@ export async function syncNotionToSupabase(): Promise<{
   let updated = 0;
   let inserted = 0;
   let failed = 0;
-  let allSuccess = true;
 
   for (const page of pages) {
+    const failureKey = `notion:supabase:update:page:${page.id}`;
     try {
       // 既存レコードを探す（notion_page_id で紐付け）
       const { data: existing, error: findErr } = await supabase
@@ -83,6 +83,16 @@ export async function syncNotionToSupabase(): Promise<{
           })
           .eq('id', existing.id);
         if (updErr) throw updErr;
+        await resolveSyncFailure({
+          source: 'notion',
+          target: 'supabase',
+          record_id: existing.id,
+        });
+        await resolveSyncFailure({
+          source: 'notion',
+          target: 'supabase',
+          failure_key: failureKey,
+        });
         updated += 1;
       } else {
         // Notion 側で新規作成されたページ → Supabase に INSERT
@@ -91,43 +101,53 @@ export async function syncNotionToSupabase(): Promise<{
         const xUsername = normalizeXUrl(xLink);
         const short = pageIdShort(page.id);
 
-        const { error: insErr } = await supabase.from('illustrators').insert({
-          notion_page_id: page.id,
-          artist_name: rawArtistName && rawArtistName.trim() !== ''
-            ? rawArtistName
-            : `(名無し-${short})`,
-          x_link: xLink,
-          x_username: xUsername ?? `(no-x-link-${short})`,
-          is_illustrator: true,
-          ...extractNotionLedFields(page),
-          last_synced_from_notion_at: nowIso,
-        });
+        const { data: insertedRow, error: insErr } = await supabase
+          .from('illustrators')
+          .insert({
+            notion_page_id: page.id,
+            artist_name: rawArtistName && rawArtistName.trim() !== ''
+              ? rawArtistName
+              : `(名無し-${short})`,
+            x_link: xLink,
+            x_username: xUsername ?? `(no-x-link-${short})`,
+            is_illustrator: true,
+            ...extractNotionLedFields(page),
+            last_synced_from_notion_at: nowIso,
+          })
+          .select('id')
+          .single();
         if (insErr) throw insErr;
+        await resolveSyncFailure({
+          source: 'notion',
+          target: 'supabase',
+          record_id: insertedRow.id,
+        });
+        await resolveSyncFailure({
+          source: 'notion',
+          target: 'supabase',
+          failure_key: failureKey,
+        });
         inserted += 1;
       }
     } catch (e) {
       failed += 1;
-      allSuccess = false;
       const msg = (e as Error).message ?? String(e);
       await recordSyncFailure({
         source: 'notion',
         target: 'supabase',
         operation: 'update',
         error_message: `page_id=${page.id}: ${msg}`,
+        failure_key: failureKey,
       });
       logger.error({ err: e, page_id: page.id }, 'Notion→Supabase 個別失敗');
     }
   }
 
-  // 全件成功なら sync_state を「ジョブ開始時刻」で更新。
-  // 部分失敗時は更新しない（次回同じ範囲を再取得してリトライ）。
-  if (allSuccess) {
-    await setSyncStateLastRunAt('notion_to_supabase', jobStartedAt);
-  } else {
-    logger.warn(
-      { failed },
-      'Notion→Supabase: 部分失敗あり。sync_state を更新せず次回同じ範囲を再取得する',
-    );
+  // 成功分を先へ進めるため、個別失敗があっても sync_state はジョブ開始時刻へ進める。
+  // 失敗ページは sync_failures に残し、次回の全範囲再処理で全同期を詰まらせない。
+  await setSyncStateLastRunAt('notion_to_supabase', jobStartedAt);
+  if (failed > 0) {
+    logger.warn({ failed }, 'Notion→Supabase: 個別失敗あり。sync_failures を確認してください');
   }
 
   const summary = { total: pages.length, updated, inserted, failed };

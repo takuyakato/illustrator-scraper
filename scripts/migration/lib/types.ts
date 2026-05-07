@@ -5,8 +5,9 @@
  * CREATE TABLE illustrators と 1:1 に対応する。
  *
  * NOTE:
- *  - ENUM 型のカラム（master_status / rank / style_tags / owner_confirmed_by / genres）
- *    は、TypeScript 側ではリテラル型のユニオンで表現する。
+ *  - ENUM 型のカラム（master_status / rank / genres）は、TypeScript 側では
+ *    リテラル型のユニオンで表現する。
+ *  - Notion multi_select と同期する style_tags / owner_confirmed_by は TEXT[] として扱う。
  *  - 配列カラムは TypeScript の配列型に対応させる。
  *  - マイグレーションスクリプトで INSERT に使う形を想定し、
  *    DB 側のデフォルト値で埋められる列（id / created_at / updated_at 等）は
@@ -17,7 +18,7 @@
 // ENUM 型（02_Supabaseスキーマ.md Section 2）
 // ============================================================
 
-/** マスターステータス（7値） */
+/** マスターステータス */
 export type MasterStatus =
   | '候補'
   | '連絡中'
@@ -25,19 +26,26 @@ export type MasterStatus =
   | '多忙辞退'
   | '条件次第'
   | '依頼成功'
-  | '依頼不可';
+  | '依頼不可'
+  | '時間をおいて再度連絡';
 
 /** ランク（S/A/B/C） */
 export type Rank = 'S' | 'A' | 'B' | 'C';
 
-/** 絵柄タグ（4値） */
-export type StyleTag = 'イケメン' | 'リアル' | 'デフォルメ' | 'クセ強';
+/** 絵柄タグ（Notion multi_select） */
+export type StyleTag = string;
 
-/** オーナー（3名） */
-export type Owner = '北條' | '三村' | '加藤';
+/** オーナー確認（Notion multi_select） */
+export type Owner = string;
 
-/** ジャンル（5値） */
-export type Genre = 'BLサンド' | 'Capuri' | 'Berryfeel' | 'Webtoon' | 'アシスタント';
+/** ジャンル（6値） */
+export type Genre =
+  | 'BLサンド'
+  | 'Capuri'
+  | 'Berryfeel'
+  | 'Webtoon'
+  | 'アシスタント'
+  | '広告用';
 
 // ============================================================
 // illustrators テーブルのレコード型
@@ -86,22 +94,12 @@ export interface IllustratorRecord {
   note: string | null;
 
   // --- Legacy カラム ---
-  legacy_status: string | null;
-  legacy_status_1: string | null;
   legacy_contact_status: string | null;
-  legacy_capuri_berryfeel_search: string[];
   legacy_mimura_comment: string | null;
   legacy_hojo_comment: string | null;
-  legacy_mimura_points: number | null;
   legacy_hojo_points: number | null;
-  legacy_found_date: string | null;
   legacy_found_by: string | null;
-  legacy_start_date: string | null;
-  legacy_end_date: string | null;
   legacy_capuri_request_id: string | null;
-  legacy_mail_alt: string | null;
-  legacy_recontact_time: string | null;
-  legacy_rejection_reason: string[];
   migration_snapshot: unknown;
 
   // --- Notion連携 ---

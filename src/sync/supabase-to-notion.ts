@@ -8,7 +8,7 @@
  *   - notion_page_id があれば既存ページを Supabase主導フィールドのみで update
  *   - notion_page_id が無ければ新規ページを作成し、作成後に Supabase に page_id を保存
  *   - 書き込み後、個別レコードの last_synced_to_notion_at = NOW() を更新
- *     （migration 012 のトリガー分岐により updated_at は進まず、ループしない）
+ *     （update_updated_at トリガーにより updated_at は進まず、ループしない）
  *
  * 実行: `tsx src/sync/supabase-to-notion.ts`
  */
@@ -22,7 +22,7 @@ import {
   type NotionProperties,
 } from '../lib/notion-properties.js';
 import { supabase } from '../lib/supabase.js';
-import { recordSyncFailure } from '../lib/sync-failure.js';
+import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import type { IllustratorRow } from '../lib/types.js';
 
 const env = loadSyncEnv();
@@ -52,6 +52,7 @@ export async function syncSupabaseToNotion(): Promise<{
   let failed = 0;
 
   for (const row of rows) {
+    const operation = row.notion_page_id ? 'update' : 'insert';
     try {
       if (row.notion_page_id) {
         // 既存ページ：Supabase主導フィールドのみ送る
@@ -70,21 +71,30 @@ export async function syncSupabaseToNotion(): Promise<{
             typeof notion.pages.create
           >[0]['properties'],
         });
-        await supabase
+        const { error: pageIdErr } = await supabase
           .from('illustrators')
           .update({ notion_page_id: page.id })
           .eq('id', row.id);
+        if (pageIdErr) {
+          throw new Error(`notion_page_id 保存失敗: ${pageIdErr.message}`);
+        }
         created += 1;
       }
 
-      // 同期完了タイムスタンプ（このカラム単独の UPDATE なので migration 012 で updated_at は進まない）
+      // 同期完了タイムスタンプ（sync メタデータ単独 UPDATE なので updated_at は進まない）
       const { error: stampErr } = await supabase
         .from('illustrators')
         .update({ last_synced_to_notion_at: new Date().toISOString() })
         .eq('id', row.id);
       if (stampErr) {
-        logger.warn({ err: stampErr, id: row.id }, 'last_synced_to_notion_at 更新失敗');
+        throw new Error(`last_synced_to_notion_at 更新失敗: ${stampErr.message}`);
       }
+
+      await resolveSyncFailure({
+        source: 'supabase',
+        target: 'notion',
+        record_id: row.id,
+      });
 
       await sleep(NOTION_RATE_LIMIT_SLEEP_MS);
     } catch (e) {
@@ -94,7 +104,7 @@ export async function syncSupabaseToNotion(): Promise<{
         source: 'supabase',
         target: 'notion',
         record_id: row.id,
-        operation: row.notion_page_id ? 'update' : 'insert',
+        operation,
         error_message: msg,
       });
       logger.error({ err: e, id: row.id, x_username: row.x_username }, 'Supabase→Notion 同期失敗');

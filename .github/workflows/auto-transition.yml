@@ -1,6 +1,6 @@
 name: Auto Transition (daily JST 03:00)
 
-# 1日1回 JST 03:00 = UTC 18:00 に、連絡中+30日経過のレコードを返信なしに遷移する。
+# 1日1回 JST 03:00 = UTC 18:00 に、連絡中+14日経過のレコードを返信なしに遷移する。
 # Supabase RPC 実行 + Notion ページの master_status/note を直接更新する合わせ技。
 
 on:

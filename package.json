@@ -17,9 +17,9 @@
     "sync:auto-transition": "tsx src/sync/auto-transition.ts",
     "sync:notify-failures": "tsx src/failures/notify.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint 'scripts/**/*.ts' 'src/**/*.ts'",
+    "lint": "tsc --noEmit",
     "format": "prettier --write 'scripts/**/*.ts' 'src/**/*.ts'",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",

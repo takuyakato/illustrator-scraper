@@ -24,10 +24,10 @@ export async function notifyFailures(): Promise<{
   // 未解決 かつ (未通知 OR 24時間以上前に通知) を対象にする
   const { data, error } = await supabase
     .from('sync_failures')
-    .select('id, source, target, error_message, created_at, last_notified_at')
+    .select('id, source, target, error_message, created_at, last_seen_at, occurrence_count, last_notified_at')
     .is('resolved_at', null)
     .or(`last_notified_at.is.null,last_notified_at.lt.${cutoff}`)
-    .order('created_at', { ascending: false })
+    .order('last_seen_at', { ascending: false })
     .limit(500); // 安全上限：1回の通知で500件まで
 
   if (error) {
@@ -50,6 +50,8 @@ export async function notifyFailures(): Promise<{
       target: f.target,
       error_message: f.error_message,
       created_at: f.created_at,
+      last_seen_at: f.last_seen_at,
+      occurrence_count: f.occurrence_count,
     })),
   );
 
