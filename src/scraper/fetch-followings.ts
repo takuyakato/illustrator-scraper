@@ -4,13 +4,13 @@
  * Phase 3 本実装の最初の単位。DB upsert はまだ行わず、取得安定性と
  * 変換ロジックを確認するため tmp/scraper-followings.json に保存する。
  */
-import { createClient } from '@supabase/supabase-js';
 import { chromium, type Page } from 'playwright';
 import { config as loadDotenv } from 'dotenv';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { type ScrapedFollowing, toCandidateRecord } from './filter.js';
+import { createSupabaseClientFromEnv, fetchExistingIllustrators, writeScraperCandidates } from './upsert.js';
 
 loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 
@@ -18,6 +18,7 @@ const storagePath = path.resolve(process.cwd(), '.scraper/x-storage-state.json')
 const outputPath = path.resolve(process.cwd(), 'tmp/scraper-followings.json');
 const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? 200);
 const headless = process.env.SCRAPER_HEADLESS === 'true';
+const shouldWrite = process.env.SCRAPER_WRITE === 'true';
 
 type Candidate = ScrapedFollowing;
 
@@ -95,9 +96,16 @@ const allCandidates = Array.from(candidates.values()).slice(0, maxItems);
 const preparedRecords = allCandidates
   .map((candidate) => toCandidateRecord(candidate, seed.x_username))
   .filter((record): record is NonNullable<typeof record> => Boolean(record));
-const existingUsernames = await fetchExistingUsernames(preparedRecords.map((record) => record.x_username));
-const newRecords = preparedRecords.filter((record) => !existingUsernames.has(record.x_username));
-const duplicateRecords = preparedRecords.filter((record) => existingUsernames.has(record.x_username));
+const supabase = createSupabaseClientFromEnv();
+const existingByUsername = await fetchExistingIllustrators(
+  supabase,
+  preparedRecords.map((record) => record.x_username),
+);
+const newRecords = preparedRecords.filter((record) => !existingByUsername.has(record.x_username));
+const duplicateRecords = preparedRecords.filter((record) => existingByUsername.has(record.x_username));
+const writeResult = shouldWrite
+  ? await writeScraperCandidates(supabase, preparedRecords, existingByUsername)
+  : { inserted: 0, updated: 0 };
 const durationSec = Math.round((Date.now() - started) / 1000);
 
 mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -108,10 +116,13 @@ writeFileSync(
       method: 'playwright-graphql',
       seed,
       stats: {
+        mode: shouldWrite ? 'write' : 'dry-run',
         totalFetched: allCandidates.length,
         prepared: preparedRecords.length,
         newCandidates: newRecords.length,
         duplicated: duplicateRecords.length,
+        inserted: writeResult.inserted,
+        updated: writeResult.updated,
         excludedByAi: preparedRecords.filter((record) => record.exclusion_reason === 'ai_keyword').length,
         excludedByNoPixiv: preparedRecords.filter((record) => record.exclusion_reason === 'no_pixiv_link').length,
         pendingScout: preparedRecords.filter((record) => record.is_illustrator === null).length,
@@ -132,7 +143,7 @@ writeFileSync(
 );
 
 console.log(
-  `完了: fetched=${allCandidates.length}, new=${newRecords.length}, duplicated=${duplicateRecords.length}, pending=${preparedRecords.filter((record) => record.is_illustrator === null).length}, excluded=${preparedRecords.filter((record) => record.is_illustrator === false).length} / ${durationSec}秒 / errors=${errors.length}`,
+  `完了(${shouldWrite ? 'write' : 'dry-run'}): fetched=${allCandidates.length}, new=${newRecords.length}, duplicated=${duplicateRecords.length}, inserted=${writeResult.inserted}, updated=${writeResult.updated}, pending=${preparedRecords.filter((record) => record.is_illustrator === null).length}, excluded=${preparedRecords.filter((record) => record.is_illustrator === false).length} / ${durationSec}秒 / errors=${errors.length}`,
 );
 console.log(`出力: ${outputPath}`);
 
@@ -143,11 +154,7 @@ async function resolveSeed(): Promise<SeedRecord> {
     return { x_username: process.env.X_SEED_USERNAME, artist_name: 'env override' };
   }
 
-  const supabaseUrl = requireEnv('SUPABASE_URL');
-  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const supabase = createSupabaseClientFromEnv();
 
   const { data, error } = await supabase
     .from('illustrators')
@@ -167,40 +174,6 @@ async function resolveSeed(): Promise<SeedRecord> {
   }
 
   return { x_username: seed.x_username, artist_name: seed.artist_name ?? '' };
-}
-
-async function fetchExistingUsernames(usernames: string[]): Promise<Set<string>> {
-  if (usernames.length === 0) return new Set();
-
-  const supabaseUrl = requireEnv('SUPABASE_URL');
-  const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const uniqueUsernames = [...new Set(usernames)];
-  const result = new Set<string>();
-  const chunkSize = 100;
-
-  for (let i = 0; i < uniqueUsernames.length; i += chunkSize) {
-    const chunk = uniqueUsernames.slice(i, i + chunkSize);
-    const { data, error } = await supabase.from('illustrators').select('x_username').in('x_username', chunk);
-    if (error) throw error;
-    for (const row of data ?? []) {
-      if (row.x_username) result.add(row.x_username);
-    }
-  }
-
-  return result;
-}
-
-function requireEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    console.error(`${key} が未設定です。`);
-    process.exit(1);
-  }
-  return value;
 }
 
 function extractEntries(graphqlJson: unknown): Candidate[] {
