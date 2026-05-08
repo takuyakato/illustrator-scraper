@@ -7,11 +7,21 @@ export interface ScraperSeed {
   genres: string[];
 }
 
-export async function fetchScraperSeeds(supabase: SupabaseClient, limit?: number): Promise<ScraperSeed[]> {
+export interface FetchScraperSeedsOptions {
+  ranks?: string[];
+  limit?: number;
+  offset?: number;
+}
+
+export async function fetchScraperSeeds(
+  supabase: SupabaseClient,
+  options: FetchScraperSeedsOptions = {},
+): Promise<ScraperSeed[]> {
+  const ranks = options.ranks?.length ? options.ranks : ['S', 'A', 'B'];
   const { data, error } = await supabase
     .from('illustrators')
     .select('x_username, artist_name, rank, genres')
-    .in('rank', ['S', 'A', 'B'])
+    .in('rank', ranks)
     .eq('is_illustrator', true)
     .order('rank', { ascending: true })
     .order('x_username', { ascending: true });
@@ -29,5 +39,7 @@ export async function fetchScraperSeeds(supabase: SupabaseClient, limit?: number
       genres: Array.isArray(row.genres) ? row.genres : [],
     }));
 
-  return typeof limit === 'number' && limit > 0 ? seeds.slice(0, limit) : seeds;
+  const offset = options.offset && options.offset > 0 ? options.offset : 0;
+  const sliced = seeds.slice(offset);
+  return typeof options.limit === 'number' && options.limit > 0 ? sliced.slice(0, options.limit) : sliced;
 }

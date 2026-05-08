@@ -17,13 +17,21 @@ loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 const perSeedOutputPath = path.resolve(process.cwd(), 'tmp/scraper-followings.json');
 const runOutputPath = path.resolve(process.cwd(), 'tmp/scraper-run-all.json');
 const seedLimit = parsePositiveInt(process.env.SCRAPER_SEED_LIMIT);
+const seedOffset = parseNonNegativeInt(process.env.SCRAPER_SEED_OFFSET) ?? 0;
+const seedRanks = parseCsv(process.env.SCRAPER_SEED_RANKS) ?? ['S', 'A', 'B'];
 const delayMs = parsePositiveInt(process.env.SCRAPER_SEED_DELAY_MS) ?? 30000;
 const shouldWrite = process.env.SCRAPER_WRITE === 'true';
 
 const supabase = createSupabaseClientFromEnv();
-const seeds = await fetchScraperSeeds(supabase, seedLimit);
+const seeds = await fetchScraperSeeds(supabase, {
+  ranks: seedRanks,
+  limit: seedLimit,
+  offset: seedOffset,
+});
 
-console.log(`対象シード: ${seeds.length}件 (${shouldWrite ? 'write' : 'dry-run'})`);
+console.log(
+  `対象シード: ${seeds.length}件 (${shouldWrite ? 'write' : 'dry-run'}, ranks=${seedRanks.join(',')}, offset=${seedOffset})`,
+);
 if (seeds.length === 0) {
   process.exit(0);
 }
@@ -112,6 +120,21 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function parseNonNegativeInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+function parseCsv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const values = value
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : undefined;
 }
 
 function sleep(ms: number): Promise<void> {
