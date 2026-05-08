@@ -1,0 +1,49 @@
+name: Scraper A Batch
+
+# Aランクseedを未実行優先で5件ずつ回し、その後 Sheets に同期する。
+# seed状態管理（last_scraped_followings_at）を使うので、手動で順番管理する必要はない。
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '*/15 * * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    concurrency:
+      group: scraper-a-batch
+      cancel-in-progress: false
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_MAIN_DB_ID: ${{ secrets.NOTION_MAIN_DB_ID }}
+      NOTION_SYNC_LOG_PAGE_ID: ${{ secrets.NOTION_SYNC_LOG_PAGE_ID }}
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      SCRAPER_WRITE: 'true'
+      SCRAPER_SEED_RANKS: A
+      SCRAPER_SEED_LIMIT: '5'
+      SCRAPER_SEED_DELAY_MS: '30000'
+      SCRAPER_MAX_ITEMS: '1000'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run scraper batch
+        run: npm run scraper:run-all
+
+      - name: Sync Supabase → Sheet
+        if: always()
+        run: npm run sync:supabase-to-sheet
