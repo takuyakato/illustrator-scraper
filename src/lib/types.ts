@@ -51,6 +51,9 @@ export interface IllustratorRow {
   detected_from: string[];
   first_detected_at: string;
   last_seen_at: string;
+  last_scraped_followings_at: string | null;
+  last_scrape_status: string | null;
+  last_scrape_error: string | null;
   scout_comment: string | null;
 
   // 判定フラグ

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 
 import { createSupabaseClientFromEnv } from './upsert.js';
-import { fetchScraperSeeds } from './seeds.js';
+import { fetchScraperSeeds, markScraperSeedRun } from './seeds.js';
 
 loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 
@@ -20,6 +20,7 @@ const seedLimit = parsePositiveInt(process.env.SCRAPER_SEED_LIMIT);
 const seedOffset = parseNonNegativeInt(process.env.SCRAPER_SEED_OFFSET) ?? 0;
 const seedRanks = parseCsv(process.env.SCRAPER_SEED_RANKS) ?? ['S', 'A', 'B'];
 const delayMs = parsePositiveInt(process.env.SCRAPER_SEED_DELAY_MS) ?? 30000;
+const staleDays = parsePositiveInt(process.env.SCRAPER_SEED_STALE_DAYS);
 const shouldWrite = process.env.SCRAPER_WRITE === 'true';
 
 const supabase = createSupabaseClientFromEnv();
@@ -27,10 +28,11 @@ const seeds = await fetchScraperSeeds(supabase, {
   ranks: seedRanks,
   limit: seedLimit,
   offset: seedOffset,
+  staleDays,
 });
 
 console.log(
-  `対象シード: ${seeds.length}件 (${shouldWrite ? 'write' : 'dry-run'}, ranks=${seedRanks.join(',')}, offset=${seedOffset})`,
+  `対象シード: ${seeds.length}件 (${shouldWrite ? 'write' : 'dry-run'}, ranks=${seedRanks.join(',')}, offset=${seedOffset}, staleDays=${staleDays ?? 'none'})`,
 );
 if (seeds.length === 0) {
   process.exit(0);
@@ -58,6 +60,18 @@ for (let i = 0; i < seeds.length; i += 1) {
     exitCode,
     ...summary,
   });
+
+  if (shouldWrite) {
+    try {
+      await markScraperSeedRun(supabase, {
+        xUsername: seed.x_username,
+        status: toScrapeStatus(exitCode, summary),
+        error: toScrapeError(exitCode, summary),
+      });
+    } catch (e) {
+      console.error(`@${seed.x_username} のスクレイプ状態保存に失敗しました: ${(e as Error).message}`);
+    }
+  }
 
   writeRunSummary(startedAt, results);
 
@@ -114,6 +128,30 @@ function summarize(rows: Array<Record<string, unknown>>) {
   return Object.fromEntries(
     numericKeys.map((key) => [key, rows.reduce((sum, row) => sum + (typeof row[key] === 'number' ? row[key] : 0), 0)]),
   );
+}
+
+function toScrapeStatus(
+  exitCode: number,
+  summary: Record<string, unknown>,
+): 'success' | 'failed' | 'partial' | 'timeout' {
+  if (exitCode !== 0) {
+    const message = String(summary.outputReadError ?? '').toLowerCase();
+    return message.includes('timeout') ? 'timeout' : 'failed';
+  }
+
+  const errors = typeof summary.errors === 'number' ? summary.errors : 0;
+  return errors > 0 ? 'partial' : 'success';
+}
+
+function toScrapeError(exitCode: number, summary: Record<string, unknown>): string | null {
+  const errors = typeof summary.errors === 'number' ? summary.errors : 0;
+  if (exitCode === 0 && errors === 0) return null;
+
+  if (typeof summary.outputReadError === 'string') {
+    return summary.outputReadError;
+  }
+
+  return `exitCode=${exitCode}, errors=${errors}`;
 }
 
 function parsePositiveInt(value: string | undefined): number | undefined {
