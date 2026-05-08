@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchScraperSeeds } from './seeds.js';
+import { fetchScraperSeeds, markScraperSeedRun } from './seeds.js';
 
 describe('fetchScraperSeeds', () => {
   it('filters out placeholder and advertising seeds, and applies optional limit', async () => {
@@ -125,6 +125,42 @@ describe('fetchScraperSeeds', () => {
     const seeds = await fetchScraperSeeds(supabase as never, { ranks: ['S', 'A'], staleDays: 7 });
 
     expect(seeds.map((seed) => seed.x_username)).toEqual(['never', 'old']);
+  });
+
+  it('stamps last_scraped_followings_at only on success', async () => {
+    const eq = vi.fn(async () => ({ error: null }));
+    const update = vi.fn(() => ({ eq }));
+    const supabase = {
+      from: vi.fn(() => ({
+        update,
+      })),
+    };
+
+    await markScraperSeedRun(supabase as never, {
+      xUsername: 'failed_user',
+      status: 'failed',
+      error: 'boom',
+    });
+
+    expect(update).toHaveBeenNthCalledWith(1, {
+      last_scrape_status: 'failed',
+      last_scrape_error: 'boom',
+    });
+
+    await markScraperSeedRun(supabase as never, {
+      xUsername: 'success_user',
+      status: 'success',
+      error: null,
+    });
+
+    expect(update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        last_scrape_status: 'success',
+        last_scrape_error: null,
+        last_scraped_followings_at: expect.any(String),
+      }),
+    );
   });
 });
 

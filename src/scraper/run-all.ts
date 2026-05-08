@@ -40,6 +40,8 @@ if (seeds.length === 0) {
 
 const results: Array<Record<string, unknown>> = [];
 const startedAt = new Date().toISOString();
+let hasNonSuccessResult = false;
+let hasStateWriteFailure = false;
 
 for (let i = 0; i < seeds.length; i += 1) {
   const seed = seeds[i];
@@ -54,10 +56,14 @@ for (let i = 0; i < seeds.length; i += 1) {
   } catch (e) {
     summary = { outputReadError: (e as Error).message };
   }
+  const scrapeStatus = toScrapeStatus(exitCode, summary);
+  const scrapeError = toScrapeError(exitCode, summary);
 
   results.push({
     seed,
     exitCode,
+    scrapeStatus,
+    scrapeError,
     ...summary,
   });
 
@@ -65,12 +71,17 @@ for (let i = 0; i < seeds.length; i += 1) {
     try {
       await markScraperSeedRun(supabase, {
         xUsername: seed.x_username,
-        status: toScrapeStatus(exitCode, summary),
-        error: toScrapeError(exitCode, summary),
+        status: scrapeStatus,
+        error: scrapeError,
       });
     } catch (e) {
       console.error(`@${seed.x_username} のスクレイプ状態保存に失敗しました: ${(e as Error).message}`);
+      hasStateWriteFailure = true;
     }
+  }
+
+  if (scrapeStatus !== 'success') {
+    hasNonSuccessResult = true;
   }
 
   writeRunSummary(startedAt, results);
@@ -86,6 +97,10 @@ for (let i = 0; i < seeds.length; i += 1) {
 
 writeRunSummary(startedAt, results);
 console.log(`\n完了: ${runOutputPath}`);
+if (hasNonSuccessResult || hasStateWriteFailure) {
+  console.error('1件以上のseedが非成功で終了したため、ジョブを失敗扱いにします。');
+  process.exitCode = 1;
+}
 
 function runFetchForSeed(username: string): Promise<number> {
   return new Promise((resolve) => {
@@ -134,6 +149,12 @@ function toScrapeStatus(
   exitCode: number,
   summary: Record<string, unknown>,
 ): 'success' | 'failed' | 'partial' | 'timeout' {
+  if (typeof summary.outputReadError === 'string') {
+    return exitCode !== 0 && String(summary.outputReadError).toLowerCase().includes('timeout')
+      ? 'timeout'
+      : 'failed';
+  }
+
   if (exitCode !== 0) {
     const message = String(summary.outputReadError ?? '').toLowerCase();
     return message.includes('timeout') ? 'timeout' : 'failed';

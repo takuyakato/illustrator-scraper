@@ -63,13 +63,22 @@ export async function markScraperSeedRun(
   supabase: SupabaseClient,
   params: MarkScraperSeedRunParams,
 ): Promise<void> {
+  const updatePayload: {
+    last_scraped_followings_at?: string;
+    last_scrape_status: MarkScraperSeedRunParams['status'];
+    last_scrape_error: string | null;
+  } = {
+    last_scrape_status: params.status,
+    last_scrape_error: params.error?.slice(0, 1000) ?? null,
+  };
+
+  if (params.status === 'success') {
+    updatePayload.last_scraped_followings_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from('illustrators')
-    .update({
-      last_scraped_followings_at: new Date().toISOString(),
-      last_scrape_status: params.status,
-      last_scrape_error: params.error?.slice(0, 1000) ?? null,
-    })
+    .update(updatePayload)
     .eq('x_username', params.xUsername);
 
   if (error) throw error;
