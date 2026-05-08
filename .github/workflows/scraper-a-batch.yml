@@ -6,7 +6,7 @@ name: Scraper Seed Batch
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 0 * * 1'
 
 jobs:
   scrape:
