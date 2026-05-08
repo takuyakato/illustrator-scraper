@@ -5,7 +5,7 @@
  * SCRAPER_WRITE=true の時だけ Supabase に書き込む。
  */
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 
@@ -35,6 +35,7 @@ for (let i = 0; i < seeds.length; i += 1) {
   const seed = seeds[i];
   console.log(`\n[${i + 1}/${seeds.length}] @${seed.x_username} (${seed.artist_name})`);
 
+  rmSync(perSeedOutputPath, { force: true });
   const exitCode = await runFetchForSeed(seed.x_username);
   let summary: Record<string, unknown> = {};
   try {

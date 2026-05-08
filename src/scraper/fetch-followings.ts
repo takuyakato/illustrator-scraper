@@ -1,8 +1,8 @@
 /**
  * 1シードの followings を最大200件取得して JSON 出力する。
  *
- * Phase 3 本実装の最初の単位。DB upsert はまだ行わず、取得安定性と
- * 変換ロジックを確認するため tmp/scraper-followings.json に保存する。
+ * Phase 3 本実装の最初の単位。デフォルトは dry-run で、
+ * SCRAPER_WRITE=true の時だけ Supabase に書き込む。
  */
 import { chromium, type Page } from 'playwright';
 import { config as loadDotenv } from 'dotenv';

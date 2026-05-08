@@ -25,13 +25,13 @@ describe('scraper upsert', () => {
   });
 
   it('inserts new records and updates only duplicate tracking fields', async () => {
-    const insert = vi.fn(async () => ({ error: null }));
+    const upsert = vi.fn(async () => ({ error: null }));
     const eq = vi.fn(async () => ({ error: null }));
     const update = vi.fn(() => ({ eq }));
     const supabase = {
       from: vi.fn((table: string) => {
         expect(table).toBe('illustrators');
-        return { insert, update };
+        return { upsert, update };
       }),
     };
     const existing = new Map([['duplicate_user', { x_username: 'duplicate_user', detected_from: ['seed_a'] }]]);
@@ -43,18 +43,36 @@ describe('scraper upsert', () => {
     );
 
     expect(result).toEqual({ inserted: 1, updated: 1 });
-    expect(insert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        x_username: 'new_user',
-        pixiv_link: 'https://www.pixiv.net/users/100',
-        is_illustrator: null,
-      }),
-    ]);
+    expect(upsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          x_username: 'new_user',
+          pixiv_link: 'https://www.pixiv.net/users/100',
+          is_illustrator: null,
+        }),
+      ],
+      { onConflict: 'x_username', ignoreDuplicates: true },
+    );
     expect(update).toHaveBeenCalledWith({
       detected_from: ['seed_a', 'seed_b'],
       last_seen_at: expect.any(String),
     });
     expect(eq).toHaveBeenCalledWith('x_username', 'duplicate_user');
+  });
+
+  it('deduplicates same-batch records before writing', async () => {
+    const upsert = vi.fn(async () => ({ error: null }));
+    const supabase = {
+      from: vi.fn(() => ({ upsert })),
+    };
+
+    const result = await writeScraperCandidates(supabase as never, [makeRecord('same_user'), makeRecord('same_user')], new Map());
+
+    expect(result).toEqual({ inserted: 1, updated: 0 });
+    expect(upsert).toHaveBeenCalledWith([expect.objectContaining({ x_username: 'same_user' })], {
+      onConflict: 'x_username',
+      ignoreDuplicates: true,
+    });
   });
 });
 
