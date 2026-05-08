@@ -61,12 +61,12 @@ const initialResponsePromise = page.waitForResponse(
 
 await page.goto(`https://x.com/${seed.x_username}/following`, { waitUntil: 'domcontentloaded' });
 
-const initialResponse = await initialResponsePromise;
-followingGraphqlUrl = initialResponse.url();
-followingGraphqlHeaders = pickReusableHeaders(await initialResponse.request().allHeaders());
-graphqlPages += 1;
-
 try {
+  const initialResponse = await initialResponsePromise;
+  followingGraphqlUrl = initialResponse.url();
+  followingGraphqlHeaders = pickReusableHeaders(await initialResponse.request().allHeaders());
+  graphqlPages += 1;
+
   const json = await initialResponse.json();
   nextCursor = findBottomCursor(json);
   for (const user of extractEntries(json)) {
@@ -74,13 +74,19 @@ try {
   }
   console.log(`GraphQL page #${graphqlPages}: total=${candidates.size}`);
 } catch (e) {
-  errors.push(`Initial GraphQL parse error: ${(e as Error).message}`);
+  errors.push(`Initial Following GraphQL error: ${(e as Error).message}`);
 }
 
 while (candidates.size < maxItems && followingGraphqlUrl && followingGraphqlHeaders && nextCursor) {
   const before = candidates.size;
-  const json = await fetchFollowingPage(page, followingGraphqlUrl, followingGraphqlHeaders, nextCursor);
-  graphqlPages += 1;
+  let json: unknown;
+  try {
+    json = await fetchFollowingPage(page, followingGraphqlUrl, followingGraphqlHeaders, nextCursor);
+    graphqlPages += 1;
+  } catch (e) {
+    errors.push(`Following page fetch error: ${(e as Error).message}`);
+    break;
+  }
 
   for (const user of extractEntries(json)) {
     candidates.set(user.username, user);
@@ -148,6 +154,9 @@ console.log(
 console.log(`出力: ${outputPath}`);
 
 await browser.close();
+if (errors.length > 0 && allCandidates.length === 0) {
+  process.exit(1);
+}
 
 async function resolveSeed(): Promise<SeedRecord> {
   if (process.env.X_SEED_USERNAME) {
