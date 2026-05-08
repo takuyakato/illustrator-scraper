@@ -1,7 +1,7 @@
-name: Scraper A Batch
+name: Scraper Seed Batch
 
-# Aランクseedのうち未実行分だけを5件ずつ回し、その後 Sheets に同期する。
-# 既に実行済みのseedは再実行しない。新しくAに昇格したseedは自動的に拾われる。
+# S/Aランクseedのうち未実行分だけを5件ずつ回し、その後 Sheets に同期する。
+# 既に実行済みのseedは再実行しない。新しく判定されたseedは自動的に拾われる。
 
 on:
   workflow_dispatch: {}
@@ -26,7 +26,7 @@ jobs:
       GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
       SCRAPER_WRITE: 'true'
-      SCRAPER_SEED_RANKS: A
+      SCRAPER_SEED_RANKS: S,A
       SCRAPER_SEED_LIMIT: '5'
       SCRAPER_SEED_DELAY_MS: '30000'
       SCRAPER_MAX_ITEMS: '1000'
