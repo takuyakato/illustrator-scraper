@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractPixivUrl, isAiIllustratorText, toCandidateRecord, type ScrapedFollowing } from './filter.js';
+import {
+  extractPixivUrl,
+  extractPortfolioUrl,
+  isAiIllustratorText,
+  toCandidateRecord,
+  type ScrapedFollowing,
+} from './filter.js';
 
 describe('scraper filter', () => {
   it('extracts pixiv URL from profile website and bio URLs', () => {
@@ -8,6 +14,14 @@ describe('scraper filter', () => {
     expect(extractPixivUrl(['text', 'https://www.pixiv.net/member.php?id=12345'])).toBe(
       'https://www.pixiv.net/member.php?id=12345',
     );
+  });
+
+  it('extracts portfolio URL from known portfolio services', () => {
+    expect(extractPortfolioUrl(['https://lit.link/example'])).toBe('https://lit.link/example');
+    expect(extractPortfolioUrl(['text https://potofu.me/example'])).toBe('https://potofu.me/example');
+    expect(extractPortfolioUrl(['https://skeb.jp/@example'])).toBe('https://skeb.jp/@example');
+    expect(extractPortfolioUrl(['https://example.booth.pm/'])).toBe('https://example.booth.pm/');
+    expect(extractPortfolioUrl(['https://example.com'])).toBeNull();
   });
 
   it('detects AI illustrator keywords', () => {
@@ -28,14 +42,28 @@ describe('scraper filter', () => {
     });
   });
 
-  it('marks records without pixiv as excluded for duplicate prevention', () => {
+  it('creates pending scout record when portfolio exists and pixiv is absent', () => {
+    const record = toCandidateRecord(makeFollowing({ website: 'https://lit.link/example' }), 'seed_user');
+
+    expect(record).toMatchObject({
+      x_username: 'example_user',
+      pixiv_link: null,
+      portfolio_link: 'https://lit.link/example',
+      other_contact: null,
+      is_illustrator: null,
+      exclusion_reason: null,
+    });
+  });
+
+  it('marks records without profile links as excluded for duplicate prevention', () => {
     const record = toCandidateRecord(makeFollowing({ website: null, bio_urls: [] }), 'seed_user');
 
     expect(record).toMatchObject({
       x_username: 'example_user',
       pixiv_link: null,
+      portfolio_link: null,
       is_illustrator: false,
-      exclusion_reason: 'no_pixiv_link',
+      exclusion_reason: 'no_profile_link',
     });
   });
 

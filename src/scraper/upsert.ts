@@ -110,6 +110,8 @@ function dedupeRecordsByUsername(records: ScraperCandidateRecord[]): ScraperCand
       ...existing,
       detected_from: [...new Set([...existing.detected_from, ...record.detected_from])],
       pixiv_link: existing.pixiv_link ?? record.pixiv_link,
+      portfolio_link: existing.portfolio_link ?? record.portfolio_link,
+      other_contact: existing.other_contact ?? record.other_contact,
       is_illustrator: existing.is_illustrator === null || record.is_illustrator === null ? null : existing.is_illustrator,
       exclusion_reason: existing.exclusion_reason ?? record.exclusion_reason,
     });

@@ -35,6 +35,9 @@ const pixivPatterns = [
   /https?:\/\/(?:www\.)?pixiv\.net\/[^\s]+/i,
 ];
 
+const urlPattern = /https?:\/\/[^\s"'<>]+/gi;
+const portfolioHosts = ['lit.link', 'potofu.me', 'potofu.jp', 'skeb.jp', 'booth.pm'];
+
 export function isAiIllustratorText(text: string | null | undefined): boolean {
   return aiIllustratorPattern.test(text ?? '');
 }
@@ -48,11 +51,20 @@ export function extractPixivUrl(values: Array<string | null | undefined>): strin
   return null;
 }
 
+export function extractPortfolioUrl(values: Array<string | null | undefined>): string | null {
+  for (const url of extractUrls(values)) {
+    if (isPortfolioUrl(url)) return stripTrailingPunctuation(url);
+  }
+  return null;
+}
+
 export function toCandidateRecord(following: ScrapedFollowing, seedUsername: string): ScraperCandidateRecord | null {
   const xUsername = normalizeXUrl(`@${following.username}`);
   if (!xUsername) return null;
 
   const pixivLink = extractPixivUrl([following.website, following.bio, ...following.bio_urls]);
+  const portfolioLink = extractPortfolioUrl([following.website, following.bio, ...following.bio_urls]);
+  const hasProfileLink = Boolean(pixivLink || portfolioLink);
   const aiText = [following.display_name, following.bio].join('\n');
   const isAi = isAiIllustratorText(aiText);
 
@@ -64,11 +76,28 @@ export function toCandidateRecord(following: ScrapedFollowing, seedUsername: str
     detected_from: [seedUsername],
     x_link: `https://x.com/${xUsername}`,
     pixiv_link: pixivLink,
-    portfolio_link: null,
-    other_contact: following.website && following.website !== pixivLink ? following.website : null,
-    is_illustrator: isAi || !pixivLink ? false : null,
-    exclusion_reason: isAi ? 'ai_keyword' : pixivLink ? null : 'no_pixiv_link',
+    portfolio_link: portfolioLink,
+    other_contact:
+      following.website && following.website !== pixivLink && following.website !== portfolioLink ? following.website : null,
+    is_illustrator: isAi || !hasProfileLink ? false : null,
+    exclusion_reason: isAi ? 'ai_keyword' : hasProfileLink ? null : 'no_profile_link',
   };
+}
+
+function extractUrls(values: Array<string | null | undefined>): string[] {
+  return values
+    .filter((v): v is string => Boolean(v))
+    .flatMap((value) => value.match(urlPattern) ?? [value])
+    .map(stripTrailingPunctuation);
+}
+
+function isPortfolioUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return portfolioHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
 }
 
 function stripTrailingPunctuation(url: string): string {

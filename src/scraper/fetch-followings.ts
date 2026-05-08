@@ -16,7 +16,7 @@ loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 
 const storagePath = path.resolve(process.cwd(), '.scraper/x-storage-state.json');
 const outputPath = path.resolve(process.cwd(), 'tmp/scraper-followings.json');
-const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? 200);
+const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? 1000);
 const headless = process.env.SCRAPER_HEADLESS === 'true';
 const shouldWrite = process.env.SCRAPER_WRITE === 'true';
 
@@ -130,7 +130,7 @@ writeFileSync(
         inserted: writeResult.inserted,
         updated: writeResult.updated,
         excludedByAi: preparedRecords.filter((record) => record.exclusion_reason === 'ai_keyword').length,
-        excludedByNoPixiv: preparedRecords.filter((record) => record.exclusion_reason === 'no_pixiv_link').length,
+        excludedByNoProfileLink: preparedRecords.filter((record) => record.exclusion_reason === 'no_profile_link').length,
         pendingScout: preparedRecords.filter((record) => record.is_illustrator === null).length,
         durationSec,
         graphqlPages,
