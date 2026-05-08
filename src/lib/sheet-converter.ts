@@ -2,7 +2,7 @@
  * Supabase illustrators 行 ⇔ Google Sheets 候補プール行 の変換ヘルパー。
  *
  * 列構成（ヘッダー行 A1:M1 は setup 時に設置済み）:
- *   A: 検出日      B: 検出元      C: Xアカウント  D: 表示名
+ *   A: 検出日      B: 検出元      C: XアカウントURL  D: 表示名
  *   E: プロフィール F: フォロワー数 G: Pixivリンク  H: ポートフォリオ
  *   I: 既存DB重複  J: 判定        K: 仮ランク     L: コメント     M: 同期状態
  *
@@ -12,6 +12,7 @@
  */
 
 import type { IllustratorRow } from './types.js';
+import { normalizeXUrl } from './x-url-normalizer.js';
 
 /** M 列の値の区別用定数 */
 export const SYNC_STATUS_UNSYNCED = '未同期';
@@ -29,7 +30,7 @@ export function rowToSheetA2I(row: IllustratorRow): SheetCell[] {
   return [
     row.first_detected_at?.slice(0, 10) ?? '',
     (row.detected_from ?? []).join(', '),
-    row.x_username,
+    row.x_link ?? (row.x_username ? `https://x.com/${row.x_username}` : ''),
     row.display_name ?? '',
     (row.bio ?? '').slice(0, 500),
     row.follower_count ?? '',
@@ -66,8 +67,9 @@ export function parseSheetRows(rows: string[][]): ScoutRowInput[] {
   const results: ScoutRowInput[] = [];
   rows.forEach((r, i) => {
     const rowIndex = i + 2;
-    const xUsername = (r[2] ?? '').trim();
-    // C列（Xアカウント）が空の行はスキップ（空行 or 手動編集中）
+    const rawXAccount = (r[2] ?? '').trim();
+    const xUsername = normalizeXUrl(rawXAccount) ?? rawXAccount.toLowerCase();
+    // C列（XアカウントURL）が空の行はスキップ（空行 or 手動編集中）
     if (!xUsername) return;
     results.push({
       rowIndex,
