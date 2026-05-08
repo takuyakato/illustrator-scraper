@@ -1,7 +1,7 @@
 name: Scraper A Batch
 
-# Aランクseedを未実行優先で5件ずつ回し、その後 Sheets に同期する。
-# seed状態管理（last_scraped_followings_at）を使うので、手動で順番管理する必要はない。
+# Aランクseedのうち未実行分だけを5件ずつ回し、その後 Sheets に同期する。
+# 既に実行済みのseedは再実行しない。新しくAに昇格したseedは自動的に拾われる。
 
 on:
   workflow_dispatch: {}

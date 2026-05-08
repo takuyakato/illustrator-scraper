@@ -79,7 +79,7 @@ describe('fetchScraperSeeds', () => {
     ]);
   });
 
-  it('prioritizes never-scraped seeds, then older scraped seeds', async () => {
+  it('returns only never-scraped seeds by default', async () => {
     const supabase = makeSupabaseWithRows([
       makeSeedRow({
         id: '1',
@@ -100,7 +100,31 @@ describe('fetchScraperSeeds', () => {
 
     const seeds = await fetchScraperSeeds(supabase as never, { ranks: ['S', 'A'] });
 
-    expect(seeds.map((seed) => seed.x_username)).toEqual(['never', 'old', 'recent']);
+    expect(seeds.map((seed) => seed.x_username)).toEqual(['never']);
+  });
+
+  it('includes stale scraped seeds when staleDays is set', async () => {
+    const supabase = makeSupabaseWithRows([
+      makeSeedRow({
+        id: '1',
+        x_username: 'recent',
+        artist_name: 'Recent',
+        rank: 'S',
+        last_scraped_followings_at: '2026-05-08T00:00:00.000Z',
+      }),
+      makeSeedRow({ id: '2', x_username: 'never', artist_name: 'Never', rank: 'A' }),
+      makeSeedRow({
+        id: '3',
+        x_username: 'old',
+        artist_name: 'Old',
+        rank: 'S',
+        last_scraped_followings_at: '2026-05-01T00:00:00.000Z',
+      }),
+    ]);
+
+    const seeds = await fetchScraperSeeds(supabase as never, { ranks: ['S', 'A'], staleDays: 7 });
+
+    expect(seeds.map((seed) => seed.x_username)).toEqual(['never', 'old']);
   });
 });
 

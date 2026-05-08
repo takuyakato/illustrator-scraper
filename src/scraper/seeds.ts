@@ -77,10 +77,10 @@ export async function markScraperSeedRun(
 
 function isRunnableSeed(seed: ScraperSeed, staleDays: number | undefined): boolean {
   if (!seed.last_scraped_followings_at) return true;
-  if (typeof staleDays !== 'number' || staleDays <= 0) return true;
+  if (typeof staleDays !== 'number' || staleDays <= 0) return false;
 
   const lastScrapedAt = Date.parse(seed.last_scraped_followings_at);
-  if (!Number.isFinite(lastScrapedAt)) return true;
+  if (!Number.isFinite(lastScrapedAt)) return false;
 
   const staleMs = staleDays * 24 * 60 * 60 * 1000;
   return Date.now() - lastScrapedAt >= staleMs;
