@@ -31,8 +31,9 @@ export async function runAutoTransition(): Promise<{
   notionFailed: number;
 }> {
   // 1. 対象候補を取得（RPC 実行前に ID をキャプチャ）
-  //    Postgres 側の function と同じ条件: 連絡中 + contacted_at <= CURRENT_DATE - 14日
-  const thresholdDate = new Date();
+  //    Postgres 側の function と同じ条件: 連絡中 + contacted_at <= JST基準の今日 - 14日
+  const todayJstDate = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const thresholdDate = new Date(todayJstDate);
   thresholdDate.setUTCDate(thresholdDate.getUTCDate() - 14);
   const thresholdYmd = thresholdDate.toISOString().slice(0, 10);
 
