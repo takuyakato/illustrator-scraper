@@ -24,10 +24,10 @@ export type MasterStatus =
   | '連絡中'
   | '返信なし'
   | '多忙辞退'
+  | '再連絡'
   | '条件次第'
   | '依頼成功'
-  | '依頼不可'
-  | '時間をおいて再度連絡';
+  | '依頼不可';
 
 /** ランク（S/A/B/C） */
 export type Rank = 'S' | 'A' | 'B' | 'C';
@@ -35,7 +35,7 @@ export type Rank = 'S' | 'A' | 'B' | 'C';
 /** 絵柄タグ（Notion multi_select） */
 export type StyleTag = string;
 
-/** オーナー確認（Notion multi_select） */
+/** 確認者（Notion multi_select） */
 export type Owner = string;
 
 /** ジャンル（6値） */
@@ -91,6 +91,7 @@ export interface IllustratorRecord {
   credit_name: string | null;
   contacted_at: string | null;
   contacted_by: string[];
+  recontact_at: string | null;
   note: string | null;
 
   // --- Legacy カラム ---

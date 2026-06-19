@@ -271,6 +271,7 @@ async function main(): Promise<void> {
           credit_name: null,
           contacted_at: null,
           contacted_by: [],
+          recontact_at: null,
           note: noteValue,
           is_illustrator: true,
 

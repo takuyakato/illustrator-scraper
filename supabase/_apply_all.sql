@@ -1438,3 +1438,224 @@ FROM extracted e
 WHERE sf.id = e.id
   AND e.page_id IS NOT NULL
   AND sf.failure_key IS DISTINCT FROM 'notion:supabase:update:page:' || LOWER(e.page_id);
+
+-- SOURCE: 20260508000024_add_scraper_seed_state.sql
+-- ==========================================
+-- Migration: add_scraper_seed_state
+-- Created: 2026-05-08
+-- Reason:
+--   S/Aランクseedが継続的に増える運用に備え、X followings取得の最終実行状態を
+--   illustrators に保持する。取得済み候補はrank変更後も残す前提のため、
+--   管理対象はseed側の「最後に回したか・成功したか・失敗理由」のみ。
+--
+-- Safety:
+--   nullableカラム追加のみ。既存データは変更しない。
+-- ==========================================
+
+ALTER TABLE illustrators
+  ADD COLUMN IF NOT EXISTS last_scraped_followings_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_scrape_status TEXT,
+  ADD COLUMN IF NOT EXISTS last_scrape_error TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_illustrators_scraper_seed_state
+  ON illustrators (rank, last_scraped_followings_at, x_username)
+  WHERE is_illustrator IS TRUE
+    AND x_username IS NOT NULL;
+
+COMMENT ON COLUMN illustrators.last_scraped_followings_at IS
+  'X followingsスクレイパーでこのアカウントをseedとして最後に処理した日時。';
+COMMENT ON COLUMN illustrators.last_scrape_status IS
+  'X followingsスクレイパーの最終実行状態。success / failed / partial / timeout など。';
+COMMENT ON COLUMN illustrators.last_scrape_error IS
+  'X followingsスクレイパー最終実行時のエラー要約。成功時はNULL。';
+
+-- SOURCE: 20260513000025_add_recontact_date_transition.sql
+-- ==========================================
+-- Migration: add_recontact_date_transition
+-- Created: 2026-05-13
+-- Reason:
+--   多忙辞退後に再アプローチする日付を Notion/Supabase で同期し、
+--   期日到来時にマスターステータスを再連絡へ自動遷移する。
+-- ==========================================
+
+ALTER TYPE master_status_enum ADD VALUE IF NOT EXISTS '再連絡';
+
+ALTER TABLE illustrators
+  ADD COLUMN IF NOT EXISTS recontact_at DATE;
+
+UPDATE illustrators
+   SET master_status = '多忙辞退'::master_status_enum
+ WHERE master_status = '時間をおいて再度連絡'::master_status_enum;
+
+CREATE INDEX IF NOT EXISTS idx_illustrators_recontact_due
+  ON illustrators (recontact_at)
+  WHERE master_status = '多忙辞退'
+    AND recontact_at IS NOT NULL;
+
+COMMENT ON COLUMN illustrators.recontact_at IS
+  '多忙辞退などで時間を空けて再度連絡する予定日。Notion の「再度連絡する日」と同期する。';
+
+-- SOURCE: 20260513000026_create_recontact_transition_function.sql
+-- ==========================================
+-- Migration: create_recontact_transition_function
+-- Created: 2026-05-13
+-- Reason:
+--   migration 25 で追加した master_status_enum の「再連絡」を使い、
+--   再度連絡する日が到来した多忙辞退レコードを自動遷移する。
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION auto_transition_to_recontact()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '再連絡'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 多忙辞退→再連絡] 再度連絡する日到達'
+   WHERE master_status = '多忙辞退'::master_status_enum
+     AND recontact_at IS NOT NULL
+     AND recontact_at <= (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE;
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION auto_transition_to_recontact IS
+  '多忙辞退ステータスで再度連絡する日が到来したレコードを「再連絡」に自動遷移。'
+  'note に JST 日付で [自動遷移: 多忙辞退→再連絡] を追記する。戻り値は更新件数。';
+
+-- SOURCE: 20260513000027_recontact_due_from_any_status.sql
+-- ==========================================
+-- Migration: recontact_due_from_any_status
+-- Created: 2026-05-13
+-- Reason:
+--   再度連絡する日が到来したら、元ステータスが多忙辞退でなくても再連絡へ遷移する。
+--   連絡中の14日経過と再連絡日到来が同時に成立する場合は、再連絡を優先する。
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION auto_transition_to_no_reply()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '返信なし'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 連絡中→返信なし] 14日経過'
+   WHERE master_status = '連絡中'::master_status_enum
+     AND contacted_at IS NOT NULL
+     AND contacted_at <= ((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE - 14)
+     AND (
+       recontact_at IS NULL
+       OR recontact_at > (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE
+     );
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION auto_transition_to_no_reply IS
+  '連絡中ステータスから14日経過したレコードを返信なしに自動遷移。'
+  'ただし再度連絡する日が到来している場合は再連絡遷移を優先する。戻り値は更新件数。';
+
+CREATE OR REPLACE FUNCTION auto_transition_to_recontact()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '再連絡'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 再連絡] 再度連絡する日到達'
+   WHERE master_status <> '再連絡'::master_status_enum
+     AND recontact_at IS NOT NULL
+     AND recontact_at <= (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE;
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION auto_transition_to_recontact IS
+  '再度連絡する日が到来したレコードを、元ステータスに関係なく「再連絡」に自動遷移。'
+  'note に JST 日付で [自動遷移: 再連絡] を追記する。戻り値は更新件数。';
+
+-- SOURCE: 20260513000028_fix_no_reply_transition_jst_threshold.sql
+-- ==========================================
+-- Migration: fix_no_reply_transition_jst_threshold
+-- Created: 2026-05-13
+-- Reason:
+--   auto-transition は JST 03:00（UTC 18:00）に動くため、CURRENT_DATE を使うと
+--   UTC 前日基準になり、連絡中→返信なしの14日判定が実質1日遅れる。
+--   判定日も note 日付と同じ JST date に揃える。
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION auto_transition_to_no_reply()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '返信なし'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 連絡中→返信なし] 14日経過'
+   WHERE master_status = '連絡中'::master_status_enum
+     AND contacted_at IS NOT NULL
+     AND contacted_at <= ((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE - 14)
+     AND (
+       recontact_at IS NULL
+       OR recontact_at > (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE
+     );
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION auto_transition_to_no_reply IS
+  '連絡中ステータスからJST基準で14日経過したレコードを返信なしに自動遷移。'
+  'ただし再度連絡する日が到来している場合は再連絡遷移を優先する。戻り値は更新件数。';
+
+-- SOURCE: 20260527000029_no_reply_fallback_to_created_at.sql
+-- ==========================================
+-- Migration: no_reply_fallback_to_created_at
+-- Created: 2026-05-27
+-- Reason:
+--   連絡中だが「連絡した日」が未入力の既存レコードについても、
+--   DB作成日時（created_at）の JST 日付から14日経過したら返信なしへ遷移する。
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION auto_transition_to_no_reply()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '返信なし'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 連絡中→返信なし] 14日経過'
+   WHERE master_status = '連絡中'::master_status_enum
+     AND COALESCE(contacted_at, (created_at AT TIME ZONE 'Asia/Tokyo')::DATE)
+         <= ((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE - 14)
+     AND (
+       recontact_at IS NULL
+       OR recontact_at > (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE
+     );
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+COMMENT ON FUNCTION auto_transition_to_no_reply IS
+  '連絡中ステータスからJST基準で14日経過したレコードを返信なしに自動遷移。'
+  '連絡した日が空の場合は created_at の JST 日付を基準にする。'
+  'ただし再度連絡する日が到来している場合は再連絡遷移を優先する。戻り値は更新件数。';

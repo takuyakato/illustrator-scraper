@@ -105,6 +105,7 @@ export function transformMainDbPage(page: PageObjectResponse): IllustratorRecord
     credit_name: creditName,
     contacted_at: extractDateStart(props['連絡した日']),
     contacted_by: contactedBy,
+    recontact_at: null,
     note: extractRichText(props['備考']) ?? '',
 
     // --- 判定フラグ：既存レコードは全員イラストレーター扱い ---

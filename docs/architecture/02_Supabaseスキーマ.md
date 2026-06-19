@@ -58,10 +58,10 @@ CREATE TYPE master_status_enum AS ENUM (
   '連絡中',
   '返信なし',
   '多忙辞退',
+  '再連絡',
   '条件次第',
   '依頼成功',
-  '依頼不可',
-  '時間をおいて再度連絡'
+  '依頼不可'
 );
 
 -- ランク（S/A/B/C）
@@ -122,9 +122,9 @@ CREATE TYPE genre_enum AS ENUM (
 |---|---|---|---|---|---|
 | `is_illustrator` | `BOOLEAN` | NO | `NULL` | ー | `null`=未判定（Sheets表示）、`true`=確定（Notion表示）、`false`=除外 |
 
-#### アクティブカラム・Notion同期対象（15カラム）
+#### アクティブカラム・Notion同期対象（16カラム）
 
-合意事項リストv2.1「アクティブカラム（17項目・Notion同期対象）」のうち、自動カラム（`id`/`updated_at`）を除いた15項目。
+合意事項リストv2.2「アクティブカラム（18項目・Notion同期対象）」のうち、自動カラム（`id`/`updated_at`）を除いた16項目。
 
 | カラム名 | 型 | NOT NULL | デフォルト | 制約 | 説明 |
 |---|---|---|---|---|---|
@@ -142,6 +142,7 @@ CREATE TYPE genre_enum AS ENUM (
 | `credit_name` | `TEXT` | NO | ー | ー | クレジット名義（rich_text、旧「クレジット希望」を改修） |
 | `contacted_at` | `DATE` | NO | ー | ー | 連絡した日（最新連絡日で上書き更新） |
 | `contacted_by` | `TEXT[]` | YES | `'{}'::TEXT[]` | ー | 連絡担当者の配列（multi_select、拡張可）。オーナー3名以外の値も含む |
+| `recontact_at` | `DATE` | NO | ー | ー | 再度連絡する日（多忙辞退などで次回連絡する予定日） |
 | `note` | `TEXT` | NO | ー | ー | 備考（追記式、ステータス変更ログ含む） |
 
 **補足**: `contacted_by` は `owner_enum` ではなく `TEXT[]` として保持する。実際のNotion DBでは、オーナー3名以外の連絡担当者（李・吉澤・長野・木村・野末・赤坂・北條・荻野・加藤・本人からの応募・及川・伊藤 など）が多数記録されているため、ENUM化すると値の追加のたびに `ALTER TYPE` が必要となり運用負荷が高い。multi_selectとして自由に追加可能な `TEXT[]` で保持し、複数担当者が連絡した履歴も配列として表現する。
@@ -223,6 +224,7 @@ CREATE TABLE illustrators (
   credit_name                     TEXT,
   contacted_at                    DATE,
   contacted_by                    TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+  recontact_at                    DATE,
   note                            TEXT,
 
   -- Legacy カラム（非表示・Supabase個別保持）
@@ -685,21 +687,44 @@ BEGIN
   UPDATE illustrators
      SET master_status = '返信なし'::master_status_enum,
          note = COALESCE(note || E'\n', '') ||
-                TO_CHAR(NOW(), 'YYYY-MM-DD') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
                 ' [自動遷移: 連絡中→返信なし] 14日経過'
    WHERE master_status = '連絡中'::master_status_enum
      AND contacted_at IS NOT NULL
-     AND contacted_at <= (CURRENT_DATE - INTERVAL '14 days');
+     AND contacted_at <= ((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE - 14);
 
   GET DIAGNOSTICS affected_count = ROW_COUNT;
   RETURN affected_count;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION auto_transition_to_no_reply IS '連絡中ステータスから14日経過したレコードを返信なしに自動遷移。戻り値は更新件数。';
+COMMENT ON FUNCTION auto_transition_to_no_reply IS '連絡中ステータスからJST基準で14日経過したレコードを返信なしに自動遷移。戻り値は更新件数。';
 ```
 
-### 7.7 `normalize_x_username` の自動適用トリガー
+### 7.7 自動遷移関数：任意ステータス → 再連絡（再度連絡する日到来）
+
+```sql
+CREATE OR REPLACE FUNCTION auto_transition_to_recontact()
+RETURNS INTEGER AS $$
+DECLARE
+  affected_count INTEGER;
+BEGIN
+  UPDATE illustrators
+     SET master_status = '再連絡'::master_status_enum,
+         note = COALESCE(note || E'\n', '') ||
+                TO_CHAR((NOW() AT TIME ZONE 'Asia/Tokyo')::DATE, 'YYYY-MM-DD') ||
+                ' [自動遷移: 再連絡] 再度連絡する日到達'
+   WHERE master_status <> '再連絡'::master_status_enum
+     AND recontact_at IS NOT NULL
+     AND recontact_at <= (NOW() AT TIME ZONE 'Asia/Tokyo')::DATE;
+
+  GET DIAGNOSTICS affected_count = ROW_COUNT;
+  RETURN affected_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### 7.8 `normalize_x_username` の自動適用トリガー
 
 x_username の書き込み時に自動で正規化するトリガー。
 
