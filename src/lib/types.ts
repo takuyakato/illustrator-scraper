@@ -7,22 +7,22 @@
 
 /**
  * master_status_enum
- * migration 002 create_enums.sql の ENUM 定義に一致させること。
+ * migration 002 create_enums.sql + 追加 migration の ENUM 定義に一致させること。
  */
 export type MasterStatus =
   | '候補'
   | '連絡中'
   | '返信なし'
   | '多忙辞退'
+  | '再連絡'
   | '条件次第'
   | '依頼成功'
-  | '依頼不可'
-  | '時間をおいて再度連絡';
+  | '依頼不可';
 
 /** rank_enum */
 export type Rank = 'S' | 'A' | 'B' | 'C';
 
-/** Notion の「オーナー確認」multi_select。運用中に担当者が増えるため TEXT[] で保持する。 */
+/** Notion の「確認者」multi_select。運用中に担当者が増えるため TEXT[] で保持する。 */
 export type Owner = string;
 
 /** Notion の「絵柄タグ」multi_select。運用中にタグが増えるため TEXT[] で保持する。 */
@@ -74,6 +74,7 @@ export interface IllustratorRow {
   credit_name: string | null;
   contacted_at: string | null;
   contacted_by: string[];
+  recontact_at: string | null;
   note: string | null;
 
   // Legacy（同期ジョブでは基本触らない。migration 018 で10カラム削除済み）

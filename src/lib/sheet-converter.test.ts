@@ -11,16 +11,25 @@ describe('sheet-converter', () => {
     });
 
     expect(rowToSheetA2I(row)[2]).toBe('https://x.com/example_user');
-    expect(rowToSheetFull(row)[12]).toBe(SYNC_STATUS_UNSYNCED);
+    expect(rowToSheetFull(row)[11]).toBe('');
+    expect(rowToSheetFull(row)[13]).toBe(SYNC_STATUS_UNSYNCED);
   });
 
   it('parses X account URL or legacy username from column C', () => {
     const rows = parseSheetRows([
-      ['2026-05-08', '', 'https://x.com/example_user', '', '', '', '', '', '', '', '', '', '未同期'],
-      ['2026-05-08', '', 'legacy_user', '', '', '', '', '', '', '', '', '', '未同期'],
+      ['2026-05-08', '', 'https://x.com/example_user', '', '', '', '', '', '', '', '', '', '', '未同期'],
+      ['2026-05-08', '', 'legacy_user', '', '', '', '', '', '', '', '', '', '', '未同期'],
     ]);
 
     expect(rows.map((row) => row.xUsername)).toEqual(['example_user', 'legacy_user']);
+  });
+
+  it('parses checker names from column L', () => {
+    const rows = parseSheetRows([
+      ['2026-05-08', '', 'https://x.com/example_user', '', '', '', '', '', '', '', '', '北條, 三村\n加藤、北條', '', '未同期'],
+    ]);
+
+    expect(rows[0]?.confirmedBy).toEqual(['北條', '三村', '加藤']);
   });
 });
 
@@ -53,6 +62,7 @@ function makeIllustratorRow(overrides: Partial<IllustratorRow>): IllustratorRow 
     credit_name: null,
     contacted_at: null,
     contacted_by: [],
+    recontact_at: null,
     note: null,
     legacy_contact_status: null,
     legacy_mimura_comment: null,

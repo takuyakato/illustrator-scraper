@@ -1,20 +1,21 @@
 /**
  * Supabase illustrators 行 ⇔ Google Sheets 候補プール行 の変換ヘルパー。
  *
- * 列構成（ヘッダー行 A1:M1 は setup 時に設置済み）:
+ * 列構成（ヘッダー行 A1:N1 は setup 時に設置済み）:
  *   A: 検出日      B: 検出元      C: XアカウントURL  D: 表示名
  *   E: プロフィール F: フォロワー数 G: Pixivリンク  H: ポートフォリオ
- *   I: 既存DB重複  J: 判定        K: 仮ランク     L: コメント     M: 同期状態
+ *   I: 既存DB重複  J: 判定        K: 仮ランク     L: 確認者
+ *   M: コメント    N: 同期状態
  *
  * A〜I は自動入力（supabase-to-sheet が書く）
- * J〜L はスカウト入力（人が書く）
- * M は同期状態（双方が更新）
+ * J〜M はスカウト入力（人が書く）
+ * N は同期状態（双方が更新）
  */
 
 import type { IllustratorRow } from './types.js';
 import { normalizeXUrl } from './x-url-normalizer.js';
 
-/** M 列の値の区別用定数 */
+/** N 列の値の区別用定数 */
 export const SYNC_STATUS_UNSYNCED = '未同期';
 export const SYNC_STATUS_SYNCED = '同期済み';
 export const SYNC_STATUS_FAILED = '同期失敗';
@@ -41,10 +42,10 @@ export function rowToSheetA2I(row: IllustratorRow): SheetCell[] {
 }
 
 /**
- * Supabase 行 → A〜M 列（新規 APPEND 用、J/K/L は空、M は未同期）に変換。
+ * Supabase 行 → A〜N 列（新規 APPEND 用、J/K/L/M は空、N は未同期）に変換。
  */
 export function rowToSheetFull(row: IllustratorRow): SheetCell[] {
-  return [...rowToSheetA2I(row), '', '', '', SYNC_STATUS_UNSYNCED];
+  return [...rowToSheetA2I(row), '', '', '', '', SYNC_STATUS_UNSYNCED];
 }
 
 /** スカウト入力の抽出結果 */
@@ -54,12 +55,13 @@ export interface ScoutRowInput {
   xUsername: string;
   judgment: string; // J列：'イラストレーターじゃない' or 空
   tentativeRank: string; // K列：S/A/B/C or 空
-  scoutComment: string; // L列
-  syncStatus: string; // M列
+  confirmedBy: string[]; // L列：確認者（カンマ区切り・改行区切り可）
+  scoutComment: string; // M列
+  syncStatus: string; // N列
 }
 
 /**
- * Sheets から取得した行列（A2:M 以降）を1行ずつ解釈。
+ * Sheets から取得した行列（A2:N 以降）を1行ずつ解釈。
  *
  * @param rows Sheets の values（1行目がヘッダーを除いた実データの先頭＝rowIndex=2 の行）
  */
@@ -76,9 +78,21 @@ export function parseSheetRows(rows: string[][]): ScoutRowInput[] {
       xUsername,
       judgment: (r[9] ?? '').trim(),
       tentativeRank: (r[10] ?? '').trim(),
-      scoutComment: (r[11] ?? '').trim(),
-      syncStatus: (r[12] ?? '').trim(),
+      confirmedBy: parseConfirmedBy(r[11] ?? ''),
+      scoutComment: (r[12] ?? '').trim(),
+      syncStatus: (r[13] ?? '').trim(),
     });
   });
   return results;
+}
+
+export function parseConfirmedBy(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(/[,、\n]/)
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  ];
 }

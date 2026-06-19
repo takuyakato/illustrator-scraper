@@ -34,6 +34,9 @@ export function buildSupabaseLedProperties(row: IllustratorRow): NotionPropertie
       title: [{ text: { content: row.artist_name ?? '' } }],
     },
     Xリンク: { url: row.x_link ?? null },
+    確認者: {
+      multi_select: (row.owner_confirmed_by ?? []).map((name) => ({ name })),
+    },
     // 見つけた日 は日付のみで表示（時刻不要）。Supabase.first_detected_at（TIMESTAMPTZ）
     // から YYYY-MM-DD 部分だけを取り出す。
     見つけた日: row.first_detected_at
@@ -51,7 +54,7 @@ export function buildAllProperties(row: IllustratorRow): NotionProperties {
     ...buildSupabaseLedProperties(row),
     マスターステータス: { status: { name: row.master_status } },
     ランク: row.rank ? { select: { name: row.rank } } : { select: null },
-    オーナー確認: {
+    確認者: {
       multi_select: (row.owner_confirmed_by ?? []).map((name) => ({ name })),
     },
     ジャンル: { multi_select: (row.genres ?? []).map((name) => ({ name })) },
@@ -67,6 +70,7 @@ export function buildAllProperties(row: IllustratorRow): NotionProperties {
     連絡した人: {
       multi_select: (row.contacted_by ?? []).map((name) => ({ name })),
     },
+    再度連絡する日: row.recontact_at ? { date: { start: row.recontact_at } } : { date: null },
     備考: {
       rich_text: [{ text: { content: row.note ?? '' } }],
     },
@@ -109,6 +113,7 @@ export function extractNotionLedFields(
     | 'note'
     | 'contacted_at'
     | 'contacted_by'
+    | 'recontact_at'
     | 'email'
     | 'portfolio_link'
     | 'other_contact'
@@ -124,12 +129,13 @@ export function extractNotionLedFields(
   return {
     master_status: (masterStatusName as MasterStatus | null) ?? '候補',
     rank: (rankName as Rank | null) ?? null,
-    owner_confirmed_by: extractMultiSelectNames(p['オーナー確認']) as Owner[],
+    owner_confirmed_by: extractMultiSelectNames(p['確認者'] ?? p['オーナー確認']) as Owner[],
     style_tags: extractMultiSelectNames(p['絵柄タグ']) as StyleTag[],
     genres: extractMultiSelectNames(p['ジャンル']) as Genre[],
     note: extractRichText(p['備考']),
     contacted_at: extractDateStart(p['連絡した日']),
     contacted_by: extractMultiSelectNames(p['連絡した人']),
+    recontact_at: extractDateStart(p['再度連絡する日']),
     email: extractEmail(p['メール']),
     portfolio_link: extractUrl(p['ポートフォリオサイト']),
     other_contact: extractUrl(p['その他連絡先']),

@@ -30,11 +30,11 @@ export function getSheetsClient(): sheets_v4.Sheets {
 export const SHEET_ID = env.GOOGLE_SHEET_ID;
 
 /**
- * 「候補プール!A15:M15」のような range 文字列から行番号を抽出。
+ * 「候補プール!A15:N15」のような range 文字列から行番号を抽出。
  * append API の `updatedRange` レスポンスから Supabase に保存する sheet_row_index を得るための補助。
  */
 export function parseRowIndex(updatedRange: string): number | null {
-  // 例: "候補プール!A15:M15" → 15
+  // 例: "候補プール!A15:N15" → 15
   const m = updatedRange.match(/[!:]?[A-Z]+(\d+)(?::[A-Z]+\d+)?$/);
   if (!m) return null;
   const n = parseInt(m[1], 10);

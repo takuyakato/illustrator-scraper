@@ -101,7 +101,7 @@ export async function syncSupabaseToSheet(): Promise<{
       // 新規行はまとめて APPEND し、返却された開始行から sheet_row_index を割り当てる。
       const res = await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
-        range: `${SHEET_TAB}!A2:M`,
+        range: `${SHEET_TAB}!A2:N`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: appendRows.map(rowToSheetFull) },
