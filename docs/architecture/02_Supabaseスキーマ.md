@@ -131,7 +131,7 @@ CREATE TYPE genre_enum AS ENUM (
 | `artist_name` | `TEXT` | NO | ー | ー | 作家名（Notion title、最優先の表示名） |
 | `master_status` | `master_status_enum` | NO | `'候補'` | ー | マスターステータス |
 | `rank` | `rank_enum` | NO | ー | ー | 現在のランク（オーナーが必要に応じて変更） |
-| `owner_confirmed_by` | `TEXT[]` | YES | `'{}'::TEXT[]` | ー | オーナー確認済み担当者配列（Notion multi_select、空=未確認） |
+| `owner_confirmed_by` | `TEXT[]` | YES | `'{}'::TEXT[]` | ー | 確認者の担当者配列（Notion multi_select、空=未確認） |
 | `style_tags` | `TEXT[]` | YES | `'{}'::TEXT[]` | ー | 絵柄タグ（Notion multi_select、空欄可） |
 | `genres` | `genre_enum[]` | YES | `'{}'::genre_enum[]` | ー | ジャンル（複数選択可） |
 | `x_link` | `TEXT` | NO | ー | ー | Xプロフィールの完全URL（スクレイパーが構築） |
@@ -263,7 +263,7 @@ CREATE TABLE illustrators (
 COMMENT ON TABLE illustrators IS 'BL/TL系イラストレーター候補メインテーブル。スクレイパー・Sheets・Notionの3経路で書き込まれる。';
 COMMENT ON COLUMN illustrators.x_username IS '正規化済みX username（小文字・@/URL除去）。一意キー。';
 COMMENT ON COLUMN illustrators.is_illustrator IS 'null=未判定（Sheets表示）、true=確定（Notion表示）、false=除外（どちらも非表示）';
-COMMENT ON COLUMN illustrators.owner_confirmed_by IS 'オーナー確認済み担当者配列。空=未確認（ビュー1の主フィルタ）';
+COMMENT ON COLUMN illustrators.owner_confirmed_by IS '確認者の担当者配列。空=未確認（ビュー1の主フィルタ）';
 COMMENT ON COLUMN illustrators.contacted_by IS '連絡担当者の配列（multi_select、拡張可）。オーナー3名に限らず、李・吉澤・長野・木村などスタッフ全般の名前が入る。';
 COMMENT ON COLUMN illustrators.migration_snapshot IS '念のためマイグレーション時の完全スナップショット（JSONB）';
 ```
@@ -381,7 +381,7 @@ COMMENT ON COLUMN scraping_logs.mode IS 'initial=初回フルスキャン、diff
 | `idx_illustrators_master_status` | illustrators | master_status | 通常 | ステータス別検索 |
 | `idx_illustrators_rank` | illustrators | rank | 通常 | ランク別検索 |
 | `idx_illustrators_genres_gin` | illustrators | genres | GIN | ジャンル配列検索（シード抽出） |
-| `idx_illustrators_owner_confirmed_by_gin` | illustrators | owner_confirmed_by | GIN | オーナー確認フィルタ（ビュー1） |
+| `idx_illustrators_owner_confirmed_by_gin` | illustrators | owner_confirmed_by | GIN | 確認者フィルタ（ビュー1） |
 | `idx_illustrators_contacted_by_gin` | illustrators | contacted_by | GIN | 連絡担当者による検索 |
 | `idx_illustrators_first_detected_at` | illustrators | first_detected_at | 通常（DESC） | 検出日順ソート（Sheets） |
 | `idx_illustrators_last_seen_at` | illustrators | last_seen_at | 通常 | 再検出管理 |
@@ -1012,7 +1012,7 @@ SELECT id, x_username, artist_name, rank, genres
  ORDER BY rank, last_seen_at DESC;
 ```
 
-### 11.2 ビュー1「オーナー確認用」のベースクエリ
+### 11.2 ビュー1「確認者レビュー用」のベースクエリ
 
 ```sql
 SELECT id, artist_name, master_status, rank,
@@ -1020,7 +1020,7 @@ SELECT id, artist_name, master_status, rank,
        x_link, pixiv_link, portfolio_link, note
   FROM illustrators
  WHERE is_illustrator = TRUE
-   AND cardinality(owner_confirmed_by) = 0  -- オーナー確認=空
+   AND cardinality(owner_confirmed_by) = 0  -- 確認者=空
  ORDER BY
    -- 優先順位：依頼成功 → 候補 → 連絡中 → 返信なし → 多忙辞退 → 条件次第 → 依頼不可
    CASE master_status

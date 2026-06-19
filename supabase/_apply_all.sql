@@ -154,7 +154,7 @@ CREATE TABLE illustrators (
 COMMENT ON TABLE illustrators IS 'BL/TL系イラストレーター候補メインテーブル。スクレイパー・Sheets・Notionの3経路で書き込まれる。';
 COMMENT ON COLUMN illustrators.x_username IS '正規化済みX username（小文字・@/URL除去）。一意キー。';
 COMMENT ON COLUMN illustrators.is_illustrator IS 'null=未判定（Sheets表示）、true=確定（Notion表示）、false=除外（どちらも非表示）';
-COMMENT ON COLUMN illustrators.owner_confirmed_by IS 'オーナー確認済み担当者配列。空=未確認（ビュー1の主フィルタ）';
+COMMENT ON COLUMN illustrators.owner_confirmed_by IS '確認者の担当者配列。空=未確認（ビュー1の主フィルタ）';
 COMMENT ON COLUMN illustrators.contacted_by IS '連絡担当者の配列（multi_select、拡張可）。オーナー3名に限らず、李・吉澤・長野・木村などスタッフ全般の名前が入る。';
 COMMENT ON COLUMN illustrators.migration_snapshot IS '念のためマイグレーション時の完全スナップショット（JSONB）';
 
@@ -1289,7 +1289,7 @@ ALTER TABLE illustrators
 ALTER TYPE master_status_enum ADD VALUE IF NOT EXISTS '時間をおいて再度連絡';
 
 COMMENT ON COLUMN illustrators.owner_confirmed_by IS
-  'オーナー確認済み担当者配列。Notion multi_select と同期するため TEXT[] で保持。空=未確認。';
+  '確認者の担当者配列。Notion multi_select と同期するため TEXT[] で保持。空=未確認。';
 COMMENT ON COLUMN illustrators.style_tags IS
   '絵柄タグ配列。Notion multi_select と同期するため TEXT[] で保持。';
 
