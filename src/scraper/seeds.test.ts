@@ -1,8 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchScraperSeeds, markScraperSeedRun } from './seeds.js';
 
 describe('fetchScraperSeeds', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-10T00:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('filters out placeholder and advertising seeds, and applies optional limit', async () => {
     const order2 = vi.fn(async () => ({
       data: [
