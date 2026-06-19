@@ -16,7 +16,7 @@ loadDotenv({ path: path.resolve(process.cwd(), '.env.local') });
 
 const storagePath = path.resolve(process.cwd(), '.scraper/x-storage-state.json');
 const outputPath = path.resolve(process.cwd(), 'tmp/scraper-followings.json');
-const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? 1000);
+const maxItems = parsePositiveInt(process.env.SCRAPER_MAX_ITEMS) ?? 1000;
 const headless = process.env.SCRAPER_HEADLESS === 'true';
 const shouldWrite = process.env.SCRAPER_WRITE === 'true';
 
@@ -256,6 +256,12 @@ function pickReusableHeaders(headers: Record<string, string>): Record<string, st
     'x-twitter-client-language',
   ];
   return Object.fromEntries(allowed.flatMap((key) => (headers[key] ? [[key, headers[key]]] : [])));
+}
+
+function parsePositiveInt(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
 async function fetchFollowingPage(

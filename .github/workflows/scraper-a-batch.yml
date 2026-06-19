@@ -41,9 +41,22 @@ jobs:
 
       - run: npm ci
 
+      - name: Restore X storage state
+        env:
+          X_STORAGE_STATE_JSON: ${{ secrets.X_STORAGE_STATE_JSON }}
+        run: node -e "const fs=require('node:fs'); const v=process.env.X_STORAGE_STATE_JSON; if (!v) throw new Error('X_STORAGE_STATE_JSON secret is not set'); fs.mkdirSync('.scraper',{recursive:true}); fs.writeFileSync('.scraper/x-storage-state.json', v);"
+
       - name: Run scraper batch
         run: npm run scraper:run-all
 
       - name: Sync Supabase → Sheet
         if: always()
         run: npm run sync:supabase-to-sheet
+
+      - name: Upload scraper summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-run-summary
+          path: tmp/scraper-run-all.json
+          if-no-files-found: ignore
