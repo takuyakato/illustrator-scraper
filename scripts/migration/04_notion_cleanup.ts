@@ -8,11 +8,11 @@
  *   2. 各 Notion ページに対して以下を更新:
  *      - 「マスターステータス」（status 型）: 新値に書き戻し
  *      - 「連絡した人_new」（multi_select）: contacted_by の値を配列で書き戻し
- *      - 「オーナー確認」（multi_select）: 空配列で初期化
+ *      - 「確認者」（multi_select）: 空配列で初期化
  *   3. レコード単位のエラーはスキップして全体は継続
  *
  * 注意:
- *   - 「連絡した人_new」「オーナー確認」「マスターステータス」は、
+ *   - 「連絡した人_new」「確認者」「マスターステータス」は、
  *     Step 1-A / 1-B で Notion 側に事前追加されている前提。
  *   - status 型の選択肢が事前に Notion に登録されていないと 400 エラーになる。
  */
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   logger.info({ count: allTargets.length }, 'クリーンアップ対象取得完了（全件）');
 
   // Berryfeel 由来の新規INSERTレコードは Notion メインDBに存在しないため除外
-  // （Berryfeel別DBにも「マスターステータス」「連絡した人_new」「オーナー確認」プロパティが無いので
+  // （Berryfeel別DBにも「マスターステータス」「連絡した人_new」「確認者」プロパティが無いので
   //  更新しようとすると 400 エラー）
   const targets = allTargets.filter(
     (t) => t.migration_snapshot?.source !== 'berryfeel_db',
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
       // 「連絡した人_new」は multi_select 型。Supabase の配列をそのまま name 配列に変換。
       const contactedByOptions = (t.contacted_by ?? []).map((name) => ({ name }));
 
-      // 「オーナー確認」は Supabase の owner_confirmed_by の値を書き戻す。
+      // 「確認者」は Supabase の owner_confirmed_by の値を書き戻す。
       // 大半は空配列（未確認）だが、Berryfeel 統合されたレコード（ケースB 30件）は
       // ['北條'] が入っているので、その値を反映する必要がある。
       const ownerConfirmedOptions = (t.owner_confirmed_by ?? []).map((name) => ({ name }));
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
         連絡した人_new: {
           multi_select: contactedByOptions,
         },
-        オーナー確認: {
+        確認者: {
           multi_select: ownerConfirmedOptions,
         },
       });
