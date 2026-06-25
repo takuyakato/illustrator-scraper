@@ -18,6 +18,7 @@
 import { logger } from '../lib/logger.js';
 import { getSheetsClient, SHEET_ID, parseRowIndex } from '../lib/sheets.js';
 import { rowToSheetA2I, rowToSheetFull } from '../lib/sheet-converter.js';
+import { withTransientRetry } from '../lib/retry.js';
 import { supabase } from '../lib/supabase.js';
 import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import type { IllustratorRow } from '../lib/types.js';
@@ -56,16 +57,19 @@ export async function syncSupabaseToSheet(): Promise<{
   if (updateRows.length > 0) {
     try {
       // 既存行：A〜I のみ一括更新（J〜L のスカウト入力を保護）
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        requestBody: {
-          valueInputOption: 'RAW',
-          data: updateRows.map((row) => ({
-            range: `${SHEET_TAB}!A${row.sheet_row_index}:I${row.sheet_row_index}`,
-            values: [rowToSheetA2I(row)],
-          })),
-        },
-      });
+      await withTransientRetry(
+        () => sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: {
+            valueInputOption: 'RAW',
+            data: updateRows.map((row) => ({
+              range: `${SHEET_TAB}!A${row.sheet_row_index}:I${row.sheet_row_index}`,
+              values: [rowToSheetA2I(row)],
+            })),
+          },
+        }),
+        { label: 'sheets.values.batchUpdate supabase-to-sheet' },
+      );
 
       for (const row of updateRows) {
         try {

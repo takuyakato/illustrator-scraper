@@ -21,6 +21,7 @@ import {
   buildSupabaseLedProperties,
   type NotionProperties,
 } from '../lib/notion-properties.js';
+import { withTransientRetry } from '../lib/retry.js';
 import { supabase } from '../lib/supabase.js';
 import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import type { IllustratorRow } from '../lib/types.js';
@@ -56,12 +57,15 @@ export async function syncSupabaseToNotion(): Promise<{
     try {
       if (row.notion_page_id) {
         // 既存ページ：Supabase主導フィールドのみ送る
-        await notion.pages.update({
-          page_id: row.notion_page_id,
-          properties: buildSupabaseLedProperties(row) as NotionProperties as Parameters<
-            typeof notion.pages.update
-          >[0]['properties'],
-        });
+        await withTransientRetry(
+          () => notion.pages.update({
+            page_id: row.notion_page_id!,
+            properties: buildSupabaseLedProperties(row) as NotionProperties as Parameters<
+              typeof notion.pages.update
+            >[0]['properties'],
+          }),
+          { label: `notion.pages.update id=${row.id}` },
+        );
         updated += 1;
       } else {
         // 新規ページ：全プロパティを送る

@@ -23,6 +23,7 @@ import {
   SYNC_STATUS_UNSYNCED,
 } from '../lib/sheet-converter.js';
 import { getSheetsClient, SHEET_ID } from '../lib/sheets.js';
+import { withTransientRetry } from '../lib/retry.js';
 import { supabase } from '../lib/supabase.js';
 import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import { buildSheetToSupabasePatch } from './sheet-to-supabase-patch.js';
@@ -37,10 +38,13 @@ export async function syncSheetToSupabase(): Promise<{
 }> {
   const sheets = getSheetsClient();
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_TAB}!A2:N`,
-  });
+  const res = await withTransientRetry(
+    () => sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_TAB}!A2:N`,
+    }),
+    { label: 'sheets.values.get sheet-to-supabase' },
+  );
   const rawRows = res.data.values ?? [];
   const parsed = parseSheetRows(rawRows as string[][]);
   logger.info({ rawCount: rawRows.length, usable: parsed.length }, 'Sheet→Supabase 取得');
@@ -131,13 +135,16 @@ export async function syncSheetToSupabase(): Promise<{
   // N列を一括書き戻し
   if (syncStatusUpdates.length > 0) {
     try {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        requestBody: {
-          valueInputOption: 'RAW',
-          data: syncStatusUpdates,
-        },
-      });
+      await withTransientRetry(
+        () => sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: {
+            valueInputOption: 'RAW',
+            data: syncStatusUpdates,
+          },
+        }),
+        { label: 'sheets.values.batchUpdate sync-status' },
+      );
       logger.info({ count: syncStatusUpdates.length }, 'Sheet N列 一括書き戻し完了');
     } catch (e) {
       logger.error({ err: e, count: syncStatusUpdates.length }, 'Sheet N列 書き戻し失敗');

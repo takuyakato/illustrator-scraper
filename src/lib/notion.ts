@@ -15,6 +15,7 @@ import type {
 
 import { loadSyncEnv } from './env.js';
 import { logger } from './logger.js';
+import { withTransientRetry } from './retry.js';
 
 const env = loadSyncEnv();
 
@@ -46,11 +47,14 @@ export async function queryAll(
 
   do {
     pageIndex += 1;
-    const res = await notion.databases.query({
-      ...params,
-      start_cursor: cursor,
-      page_size: 100,
-    });
+    const res = await withTransientRetry(
+      () => notion.databases.query({
+        ...params,
+        start_cursor: cursor,
+        page_size: 100,
+      }),
+      { label: `notion.databases.query page=${pageIndex}` },
+    );
 
     for (const p of res.results) {
       if (isFullPage(p as PageObjectResponse | PartialPageObjectResponse)) {
