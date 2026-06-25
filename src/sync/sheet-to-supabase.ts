@@ -23,7 +23,7 @@ import {
   SYNC_STATUS_UNSYNCED,
 } from '../lib/sheet-converter.js';
 import { getSheetsClient, SHEET_ID } from '../lib/sheets.js';
-import { withTransientRetry } from '../lib/retry.js';
+import { isTransientApiError, withTransientRetry } from '../lib/retry.js';
 import { supabase } from '../lib/supabase.js';
 import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import { buildSheetToSupabasePatch } from './sheet-to-supabase-patch.js';
@@ -175,6 +175,10 @@ if (isEntry) {
   syncSheetToSupabase()
     .then(() => process.exit(0))
     .catch((e) => {
+      if (isTransientApiError(e)) {
+        logger.warn({ err: e }, 'Sheet→Supabase は一過性APIエラーのため今回の実行をスキップします');
+        process.exit(0);
+      }
       logger.fatal({ err: e }, 'Sheet→Supabase 同期ジョブ全体失敗');
       process.exit(1);
     });

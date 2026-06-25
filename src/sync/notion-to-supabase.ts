@@ -24,6 +24,7 @@ import {
   extractXLink,
 } from '../lib/notion-properties.js';
 import { supabase } from '../lib/supabase.js';
+import { isTransientApiError } from '../lib/retry.js';
 import { recordSyncFailure, resolveSyncFailure } from '../lib/sync-failure.js';
 import { getSyncStateLastRunAt, setSyncStateLastRunAt } from '../lib/sync-state.js';
 import { normalizeXUrl } from '../lib/x-url-normalizer.js';
@@ -207,6 +208,10 @@ if (isEntry) {
   syncNotionToSupabase()
     .then(() => process.exit(0))
     .catch((e) => {
+      if (isTransientApiError(e)) {
+        logger.warn({ err: e }, 'Notion→Supabase は一過性APIエラーのため今回の実行をスキップします');
+        process.exit(0);
+      }
       logger.fatal({ err: e }, 'Notion→Supabase 同期ジョブ全体失敗');
       process.exit(1);
     });
