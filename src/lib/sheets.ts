@@ -9,6 +9,10 @@
 import { google, type sheets_v4 } from 'googleapis';
 
 import { loadSyncEnv, requireGoogleEnv } from './env.js';
+import {
+  IDENTITY_ENCODING_HEADERS,
+  withIdentityEncodingGaxiosOptions,
+} from './http.js';
 
 const env = loadSyncEnv();
 
@@ -19,8 +23,14 @@ const env = loadSyncEnv();
 export function getSheetsClient(): sheets_v4.Sheets {
   requireGoogleEnv(env);
   const credentials = JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  google.options(withIdentityEncodingGaxiosOptions());
   const auth = new google.auth.GoogleAuth({
     credentials,
+    clientOptions: {
+      transporterOptions: {
+        headers: IDENTITY_ENCODING_HEADERS,
+      },
+    },
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   return google.sheets({ version: 'v4', auth });

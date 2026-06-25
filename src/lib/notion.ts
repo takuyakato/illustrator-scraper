@@ -14,12 +14,16 @@ import type {
 } from '@notionhq/client/build/src/api-endpoints.js';
 
 import { loadSyncEnv } from './env.js';
+import { fetchWithIdentityEncoding } from './http.js';
 import { logger } from './logger.js';
 import { withTransientRetry } from './retry.js';
 
 const env = loadSyncEnv();
 
-export const notion = new Client({ auth: env.NOTION_API_KEY });
+export const notion = new Client({
+  auth: env.NOTION_API_KEY,
+  fetch: fetchWithIdentityEncoding,
+});
 
 /** Notion API レート制限対策（3 req/sec → 400ms sleep で 2.5 req/sec に抑える） */
 export const NOTION_RATE_LIMIT_SLEEP_MS = 400;
